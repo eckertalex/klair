@@ -1,7 +1,7 @@
 # klair
 
 Controls Elgato Key Light Air devices from the terminal: get status, turn lights
-on and off, and set brightness and temperature. Pure C (C11 + POSIX sockets, no
+on and off, and set brightness and temperature. Pure C (C23 + POSIX sockets, no
 dependencies), written handmade-hero style as a learning exercise.
 
 Lights are read from `~/.config/klair`, one `name = ip` pair per line (up to
@@ -21,11 +21,20 @@ klair -h          # print usage
 klair -v          # print version
 ```
 
-Build and install with make:
+## Build
+
+Requires clang 18+ or gcc 14+ (C23).
 
 ```sh
-make              # ./klair (optimized release build)
-make debug        # ./klair_debug (AddressSanitizer + UBSan)
-make install      # to ~/.local/bin (override with INSTALL_DIR=)
-make uninstall    # remove from INSTALL_DIR
+./build.sh
 ```
+
+Set `CC` to pick a compiler: `CC=clang ./build.sh`.
+
+## Install
+
+```sh
+cp klair ~/.local/bin/
+```
+
+Make sure `~/.local/bin` is on your `PATH`. To uninstall, delete the binary.

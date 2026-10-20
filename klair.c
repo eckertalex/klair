@@ -1,11 +1,13 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdarg.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +26,8 @@ typedef s32 b32;
 #define KLAIR_VERSION "v0.0.0"
 #endif
 
-#define MAX_LIGHTS 16
-#define UNSET (-1)
+constexpr s32 MAX_LIGHTS = 16;
+constexpr s32 UNSET = -1;
 #define ArrayCount(a) (sizeof(a) / sizeof((a)[0]))
 
 typedef struct {
@@ -56,13 +58,14 @@ static s32 round_div(s32 numerator, s32 denominator) {
 // don't truncate - mired 315 truncates to 3150K, but the real value is
 // 3174.6K, which rounds to 3200K. Truncating alone is off by a bucket.
 static s32 mired_to_kelvin(s32 mired) {
-    return round_to_50(round_div(1000000, mired));
+    assert(mired > 0);
+    return round_to_50(round_div(1'000'000, mired));
 }
 
 // Kelvin -> mired, sent straight to the light. Round to the nearest mired
 // so the light lands as close as possible to what the user asked for.
 static s32 kelvin_to_mired(s32 kelvin) {
-    return round_div(1000000, kelvin);
+    return round_div(1'000'000, kelvin);
 }
 
 // --- config parsing ---
@@ -95,7 +98,7 @@ static b32 parse_config(char *text, LightConfig *out, s32 max, s32 *count) {
         if(newline) {
             *newline = '\0';
         }
-        char *next = newline ? newline + 1 : NULL;
+        char *next = newline ? newline + 1 : nullptr;
 
         char *trimmed = trim(line);
         line = next;
@@ -192,14 +195,19 @@ static b32 find_int_after_key(const char *json, const char *key, s32 *out) {
 }
 
 static b32 parse_light_status(const char *json, LightDetail *out) {
-    memset(out, 0, sizeof(*out));
+    *out = (LightDetail){};
 
     if(!find_int_after_key(json, "\"on\"", &out->on)) {
         return false;
     }
 
-    find_int_after_key(json, "\"brightness\"", &out->brightness);
-    find_int_after_key(json, "\"temperature\"", &out->temperature);
+    if(!find_int_after_key(json, "\"brightness\"", &out->brightness)) {
+        return false;
+    }
+
+    if(!find_int_after_key(json, "\"temperature\"", &out->temperature)) {
+        return false;
+    }
 
     return true;
 }
@@ -434,11 +442,11 @@ static b32 start_connect(Job *job) {
     // hostname, so AI_NUMERICHOST/AI_NUMERICSERV keeps this a plain parse.
     // Without it, a hostname would trigger a real DNS lookup here, which
     // blocks - and stalls every other light waiting behind it in the loop.
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM,
+        .ai_flags = AI_NUMERICHOST | AI_NUMERICSERV,
+    };
 
     struct addrinfo *result;
     int rc = getaddrinfo(job->host, job->port, &hints, &result);
@@ -484,7 +492,7 @@ static const char *find_header(const char *headers, const char *header_end, cons
             return p + name_len;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 // Have we received a complete HTTP response? Uses Content-Length when present;
@@ -506,7 +514,7 @@ static b32 response_complete(Job *job, s32 *out_status, char **out_body) {
 
     const char *cl = find_header(job->response, header_end, "Content-Length:");
     if(cl) {
-        s32 content_length = (s32)strtol(cl, NULL, 10);
+        s32 content_length = (s32)strtol(cl, nullptr, 10);
         if(body_len < content_length) {
             return false;
         }
@@ -515,6 +523,12 @@ static b32 response_complete(Job *job, s32 *out_status, char **out_body) {
     *out_status = status;
     *out_body = body;
     return true;
+}
+
+// Device-reported mired. The only thing we need from it is that it's safe
+// to divide by.
+static b32 validate_mired(s32 n) {
+    return n > 0;
 }
 
 static void finish_with_status(Job *job, s32 status, char *body) {
@@ -530,6 +544,13 @@ static void finish_with_status(Job *job, s32 status, char *body) {
     if(!parse_light_status(body, &job->result)) {
         job->err_kind = ERR_OTHER;
         snprintf(job->err, sizeof(job->err), "parsing response failed");
+        fail_or_retry(job);
+        return;
+    }
+
+    if(!validate_mired(job->result.temperature)) {
+        job->err_kind = ERR_OTHER;
+        snprintf(job->err, sizeof(job->err), "invalid temperature in response");
         fail_or_retry(job);
         return;
     }
@@ -686,7 +707,8 @@ static void run_jobs(Job *jobs, s32 n) {
             timeout_ms = 0;
         }
 
-        int nready = poll(fds, (nfds_t)fd_count, (int)timeout_ms);
+        // +1 so a fractional wait rounds up instead of becoming a 0ms spin.
+        int nready = poll(fds, (nfds_t)fd_count, (int)(timeout_ms + 1.0));
         if(nready < 0 && errno == EINTR) {
             continue;
         }
@@ -886,33 +908,37 @@ static b32 parse_common_flags(char **args, s32 count, CliArgs *out) {
 
 // Shared by every command: resolve the targeted lights, run the request
 // against each in parallel, and print each one's result.
-static void run_command(const LightConfig *lights, s32 light_count, const char *light_name,
+static b32 run_command(const LightConfig *lights, s32 light_count, const char *light_name,
         Method method, LightDetail *settings, const char *verb) {
     LightConfig targets[MAX_LIGHTS];
     s32 target_count = resolve_lights(lights, light_count, light_name, targets);
     if(target_count == 0) {
-        return;
+        return false;
     }
 
     LightResult results[MAX_LIGHTS];
     run_lights(targets, target_count, method, settings, results);
 
+    b32 all_ok = true;
     for(s32 i = 0; i < target_count; i++) {
         print_light_result(targets[i].name, verb, &results[i]);
+        all_ok = all_ok && results[i].ok;
     }
+
+    return all_ok;
 }
 
-static void cmd_status(const LightConfig *lights, s32 light_count, const CliArgs *a) {
-    run_command(lights, light_count, a->light_name, METHOD_GET, NULL, "Status");
+static b32 cmd_status(const LightConfig *lights, s32 light_count, const CliArgs *a) {
+    return run_command(lights, light_count, a->light_name, METHOD_GET, nullptr, "Status");
 }
 
-static void cmd_on(const LightConfig *lights, s32 light_count, const CliArgs *a) {
+static b32 cmd_on(const LightConfig *lights, s32 light_count, const CliArgs *a) {
     LightDetail settings = {.on = 1, .brightness = UNSET, .temperature = UNSET};
 
     if(a->has_brightness) {
         if(!validate_brightness(a->brightness)) {
             fprintf(stderr, "invalid brightness: must be between 3 and 100\n");
-            return;
+            return false;
         }
         settings.brightness = a->brightness;
     }
@@ -920,18 +946,18 @@ static void cmd_on(const LightConfig *lights, s32 light_count, const CliArgs *a)
     if(a->has_temperature) {
         if(!validate_temperature(a->temperature)) {
             fprintf(stderr, "invalid temperature: must be between 2900K and 7000K\n");
-            return;
+            return false;
         }
         settings.temperature = kelvin_to_mired(a->temperature);
     }
 
-    run_command(lights, light_count, a->light_name, METHOD_PUT, &settings, "Update");
+    return run_command(lights, light_count, a->light_name, METHOD_PUT, &settings, "Update");
 }
 
-static void cmd_off(const LightConfig *lights, s32 light_count, const CliArgs *a) {
+static b32 cmd_off(const LightConfig *lights, s32 light_count, const CliArgs *a) {
     LightDetail settings = {.on = 0, .brightness = UNSET, .temperature = UNSET};
 
-    run_command(lights, light_count, a->light_name, METHOD_PUT, &settings, "Update");
+    return run_command(lights, light_count, a->light_name, METHOD_PUT, &settings, "Update");
 }
 
 typedef enum {
@@ -957,6 +983,10 @@ static b32 parse_command(const char *s, Command *out) {
 }
 
 int main(int argc, char **argv) {
+    // A light dropping the connection mid-write would otherwise kill us
+    // with SIGPIPE before write()'s EPIPE ever reaches our error path.
+    signal(SIGPIPE, SIG_IGN);
+
     if(argc >= 2 && strcmp(argv[1], "-h") == 0) {
         print_usage(stdout);
         return 0;
@@ -981,7 +1011,7 @@ int main(int argc, char **argv) {
     }
 
     const char *command_name = "status";
-    char **cmd_args = NULL;
+    char **cmd_args = nullptr;
     s32 cmd_arg_count = 0;
     if(argc >= 2) {
         command_name = argv[1];
@@ -1002,17 +1032,18 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    b32 ok = false;
     switch(command) {
     case CMD_STATUS:
-        cmd_status(lights, light_count, &a);
+        ok = cmd_status(lights, light_count, &a);
         break;
     case CMD_ON:
-        cmd_on(lights, light_count, &a);
+        ok = cmd_on(lights, light_count, &a);
         break;
     case CMD_OFF:
-        cmd_off(lights, light_count, &a);
+        ok = cmd_off(lights, light_count, &a);
         break;
     }
 
-    return 0;
+    return ok ? 0 : 1;
 }
