@@ -57,9 +57,11 @@ esac
 # --- Build Metadata ----------------------------------------------------------
 VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo v0.0.0)"
 
+VERSION_FLAG="-DKLAIR_VERSION=\"$VERSION\""
+
 # --- Build -------------------------------------------------------------------
 mkdir -p build
-$compiler $FLAGS $MODE_FLAGS -DKLAIR_VERSION="\"$VERSION\"" klair.c -o build/klair
+$compiler $FLAGS $MODE_FLAGS $VERSION_FLAG klair.c -o build/klair
 
 # --- Run ---------------------------------------------------------------------
 if [ "$action" = "run" ]; then
