@@ -17,23 +17,30 @@
 #include <time.h>
 #include <unistd.h>
 
+#if !defined(BUILD_DEBUG)
+# define BUILD_DEBUG 1
+#endif
+
+#define internal static
+#define global static
+#define local_persist static
+
 typedef uint8_t u8;
 typedef uint32_t u32;
-typedef int32_t s32;
-typedef s32 b32;
+typedef int32_t i32;
 
 #ifndef KLAIR_VERSION
 #define KLAIR_VERSION "v0.0.0"
 #endif
 
-constexpr s32 MAX_LIGHTS = 16;
-constexpr s32 UNSET = -1;
+constexpr i32 MAX_LIGHTS = 16;
+constexpr i32 UNSET = -1;
 #define ArrayCount(a) (sizeof(a) / sizeof((a)[0]))
 
 typedef struct {
-    s32 on;
-    s32 brightness;
-    s32 temperature;
+    i32 on;
+    i32 brightness;
+    i32 temperature;
 } LightDetail;
 
 typedef struct {
@@ -44,27 +51,27 @@ typedef struct {
 // --- unit conversion ---
 // The Elgato wire protocol speaks mired; the CLI speaks Kelvin.
 
-static s32 round_to_50(s32 n) {
+internal i32 round_to_50(i32 n) {
     return (n + 25) / 50 * 50;
 }
 
 // Same trick as round_to_50 - add half the divisor before the division
 // rounds instead of truncates - just for an arbitrary divisor.
-static s32 round_div(s32 numerator, s32 denominator) {
+internal i32 round_div(i32 numerator, i32 denominator) {
     return (numerator + denominator / 2) / denominator;
 }
 
 // mired -> Kelvin for display. Round before bucketing to the nearest 50K,
 // don't truncate - mired 315 truncates to 3150K, but the real value is
 // 3174.6K, which rounds to 3200K. Truncating alone is off by a bucket.
-static s32 mired_to_kelvin(s32 mired) {
+internal i32 mired_to_kelvin(i32 mired) {
     assert(mired > 0);
     return round_to_50(round_div(1'000'000, mired));
 }
 
 // Kelvin -> mired, sent straight to the light. Round to the nearest mired
 // so the light lands as close as possible to what the user asked for.
-static s32 kelvin_to_mired(s32 kelvin) {
+internal i32 kelvin_to_mired(i32 kelvin) {
     return round_div(1'000'000, kelvin);
 }
 
@@ -72,7 +79,7 @@ static s32 kelvin_to_mired(s32 kelvin) {
 // name = ip, one per line. It's our own format, not JSON, so a few lines
 // of scanning beats pulling in a parser for it.
 
-static char *trim(char *s) {
+internal char *trim(char *s) {
     while(isspace((unsigned char)*s)) {
         s++;
     }
@@ -90,7 +97,7 @@ static char *trim(char *s) {
     return s;
 }
 
-static b32 parse_config(char *text, LightConfig *out, s32 max, s32 *count) {
+internal bool parse_config(char *text, LightConfig *out, i32 max, i32 *count) {
     *count = 0;
 
     for(char *line = text; line; ) {
@@ -130,29 +137,29 @@ static b32 parse_config(char *text, LightConfig *out, s32 max, s32 *count) {
     return true;
 }
 
-static b32 resolve_config_path(char *buf, u32 cap) {
+internal bool resolve_config_path(char *buf, u32 cap) {
     const char *home = getenv("HOME");
     if(!home || *home == '\0') {
         return false;
     }
 
-    s32 len = snprintf(buf, cap, "%s/.config/klair", home);
+    i32 len = snprintf(buf, cap, "%s/.config/klair", home);
     return len > 0 && (u32)len < cap;
 }
 
-static b32 load_config(const char *path, LightConfig *out, s32 max, s32 *count) {
+internal bool load_config(const char *path, LightConfig *out, i32 max, i32 *count) {
     FILE *f = fopen(path, "rb");
     if(!f) {
         return false;
     }
 
     char buf[8192];
-    s32 n = (s32)fread(buf, 1, sizeof(buf) - 1, f);
+    i32 n = (i32)fread(buf, 1, sizeof(buf) - 1, f);
 
     // n hit capacity because the file ran out of buffer, not because it
     // ended - peek one more byte to tell those apart before we go parsing
     // half a line.
-    b32 truncated = (n == (s32)sizeof(buf) - 1) && (fgetc(f) != EOF);
+    bool truncated = (n == (i32)sizeof(buf) - 1) && (fgetc(f) != EOF);
     fclose(f);
     if(truncated) {
         return false;
@@ -168,7 +175,7 @@ static b32 load_config(const char *path, LightConfig *out, s32 max, s32 *count) 
 // tiny - so we just pull the three integer fields we need out of the text
 // rather than write a parser for it.
 
-static b32 find_int_after_key(const char *json, const char *key, s32 *out) {
+internal bool find_int_after_key(const char *json, const char *key, i32 *out) {
     const char *p = strstr(json, key);
     if(!p) {
         return false;
@@ -190,11 +197,11 @@ static b32 find_int_after_key(const char *json, const char *key, s32 *out) {
         return false;
     }
 
-    *out = (s32)value;
+    *out = (i32)value;
     return true;
 }
 
-static b32 parse_light_status(const char *json, LightDetail *out) {
+internal bool parse_light_status(const char *json, LightDetail *out) {
     *out = (LightDetail){};
 
     if(!find_int_after_key(json, "\"on\"", &out->on)) {
@@ -216,15 +223,15 @@ static b32 parse_light_status(const char *json, LightDetail *out) {
 
 // Appends to buf[*len] and advances *len; false on truncation, *len left
 // alone, so a caller bails instead of driving `cap - len` negative later.
-static b32 append_fmt(char *buf, u32 cap, s32 *len, const char *fmt, ...) {
-    s32 remaining = (s32)cap - *len;
+internal bool append_fmt(char *buf, u32 cap, i32 *len, const char *fmt, ...) {
+    i32 remaining = (i32)cap - *len;
     if(remaining <= 0) {
         return false;
     }
 
     va_list ap;
     va_start(ap, fmt);
-    s32 n = vsnprintf(buf + *len, (u32)remaining, fmt, ap);
+    i32 n = vsnprintf(buf + *len, (u32)remaining, fmt, ap);
     va_end(ap);
 
     if(n < 0 || n >= remaining) {
@@ -235,8 +242,8 @@ static b32 append_fmt(char *buf, u32 cap, s32 *len, const char *fmt, ...) {
     return true;
 }
 
-static s32 build_light_body(char *buf, u32 cap, LightDetail d) {
-    s32 len = 0;
+internal i32 build_light_body(char *buf, u32 cap, LightDetail d) {
+    i32 len = 0;
     if(!append_fmt(buf, cap, &len, "{\"lights\":[{\"on\":%d", d.on)) {
         return -1;
     }
@@ -259,16 +266,16 @@ static s32 build_light_body(char *buf, u32 cap, LightDetail d) {
 // 3 attempts total; on failure wait `backoff_ms`, then double it.
 
 typedef struct {
-    s32 attempts_left;
+    i32 attempts_left;
     double backoff_ms;
 } RetryState;
 
-static void retry_init(RetryState *r, s32 max_attempts, double initial_backoff_ms) {
+internal void retry_init(RetryState *r, i32 max_attempts, double initial_backoff_ms) {
     r->attempts_left = max_attempts;
     r->backoff_ms = initial_backoff_ms;
 }
 
-static b32 retry_advance(RetryState *r, double *wait_ms) {
+internal bool retry_advance(RetryState *r, double *wait_ms) {
     // Never call this once exhausted - a caller checking retry_advance's
     // own return value should never let that happen.
     assert(r->attempts_left > 0);
@@ -321,11 +328,11 @@ typedef struct {
     char port[16];
 
     char request[512];
-    s32 request_len;
-    s32 request_sent;
+    i32 request_len;
+    i32 request_sent;
 
     char response[8192];
-    s32 response_len;
+    i32 response_len;
 
     int fd;
     JobState state;
@@ -334,19 +341,19 @@ typedef struct {
     double wake_at_ms;
     double deadline_ms;
 
-    b32 ok;
+    bool ok;
     LightDetail result;
     ErrorKind err_kind;
     char err[128];
 } Job;
 
-static double now_ms(void) {
+internal double now_ms(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1e6;
 }
 
-static b32 split_host_port(const char *ip, char *host, u32 host_cap, char *port, u32 port_cap) {
+internal bool split_host_port(const char *ip, char *host, u32 host_cap, char *port, u32 port_cap) {
     const char *colon = strrchr(ip, ':');
     if(!colon) {
         return false;
@@ -368,7 +375,7 @@ static b32 split_host_port(const char *ip, char *host, u32 host_cap, char *port,
     return true;
 }
 
-static b32 build_request(Job *job, LightDetail *settings) {
+internal bool build_request(Job *job, LightDetail *settings) {
     if(job->method == METHOD_GET) {
         job->request_len = snprintf(job->request, sizeof(job->request),
             "GET /elgato/lights HTTP/1.1\r\n"
@@ -379,7 +386,7 @@ static b32 build_request(Job *job, LightDetail *settings) {
             job->host);
     } else {
         char body[256];
-        s32 body_len = build_light_body(body, sizeof(body), *settings);
+        i32 body_len = build_light_body(body, sizeof(body), *settings);
         if(body_len < 0) {
             return false;
         }
@@ -399,7 +406,7 @@ static b32 build_request(Job *job, LightDetail *settings) {
     return job->request_len > 0 && (u32)job->request_len < sizeof(job->request);
 }
 
-static void fail_or_retry(Job *job) {
+internal void fail_or_retry(Job *job) {
     double wait_ms;
     if(retry_advance(&job->retry, &wait_ms)) {
         job->state = JOB_RETRY_WAIT;
@@ -409,7 +416,7 @@ static void fail_or_retry(Job *job) {
     }
 }
 
-static void job_init(Job *job, const LightConfig *cfg, Method method, LightDetail *settings) {
+internal void job_init(Job *job, const LightConfig *cfg, Method method, LightDetail *settings) {
     memset(job, 0, sizeof(*job));
     job->cfg = cfg;
     job->method = method;
@@ -437,7 +444,7 @@ static void job_init(Job *job, const LightConfig *cfg, Method method, LightDetai
     job->wake_at_ms = now_ms();
 }
 
-static b32 start_connect(Job *job) {
+internal bool start_connect(Job *job) {
     // Config entries are always a literal ip:port (see README), never a
     // hostname, so AI_NUMERICHOST/AI_NUMERICSERV keeps this a plain parse.
     // Without it, a hostname would trigger a real DNS lookup here, which
@@ -485,7 +492,7 @@ static b32 start_connect(Job *job) {
     return true;
 }
 
-static const char *find_header(const char *headers, const char *header_end, const char *name) {
+internal const char *find_header(const char *headers, const char *header_end, const char *name) {
     u32 name_len = (u32)strlen(name);
     for(const char *p = headers; p + name_len <= header_end; p++) {
         if(strncasecmp(p, name, name_len) == 0) {
@@ -497,24 +504,24 @@ static const char *find_header(const char *headers, const char *header_end, cons
 
 // Have we received a complete HTTP response? Uses Content-Length when present;
 // otherwise the caller falls back to "connection closed = response complete".
-static b32 response_complete(Job *job, s32 *out_status, char **out_body) {
+internal bool response_complete(Job *job, i32 *out_status, char **out_body) {
     char *header_end = strstr(job->response, "\r\n\r\n");
     if(!header_end) {
         return false;
     }
 
-    s32 status = 0;
+    i32 status = 0;
     if(sscanf(job->response, "HTTP/%*d.%*d %d", &status) != 1) {
         return false;
     }
 
     char *body = header_end + 4;
-    s32 header_len = (s32)(body - job->response);
-    s32 body_len = job->response_len - header_len;
+    i32 header_len = (i32)(body - job->response);
+    i32 body_len = job->response_len - header_len;
 
     const char *cl = find_header(job->response, header_end, "Content-Length:");
     if(cl) {
-        s32 content_length = (s32)strtol(cl, nullptr, 10);
+        i32 content_length = (i32)strtol(cl, nullptr, 10);
         if(body_len < content_length) {
             return false;
         }
@@ -527,11 +534,11 @@ static b32 response_complete(Job *job, s32 *out_status, char **out_body) {
 
 // Device-reported mired. The only thing we need from it is that it's safe
 // to divide by.
-static b32 validate_mired(s32 n) {
+internal bool validate_mired(i32 n) {
     return n > 0;
 }
 
-static void finish_with_status(Job *job, s32 status, char *body) {
+internal void finish_with_status(Job *job, i32 status, char *body) {
     // Only a PUT enforces a 200 status; a GET parses whatever body comes
     // back regardless of status code.
     if(job->method == METHOD_PUT && status != 200) {
@@ -559,7 +566,7 @@ static void finish_with_status(Job *job, s32 status, char *body) {
     job->state = JOB_DONE;
 }
 
-static void service_job(Job *job) {
+internal void service_job(Job *job) {
     // Only ever called from run_jobs for a job it just put an active fd
     // into the poll() set for - CONNECTING, WRITING, or READING.
     assert(job->fd >= 0);
@@ -600,7 +607,7 @@ static void service_job(Job *job) {
             return;
         }
 
-        job->request_sent += (s32)n;
+        job->request_sent += (i32)n;
         if(job->request_sent >= job->request_len) {
             job->state = JOB_READING;
         }
@@ -608,7 +615,7 @@ static void service_job(Job *job) {
     }
 
     if(job->state == JOB_READING) {
-        if(job->response_len >= (s32)sizeof(job->response) - 1) {
+        if(job->response_len >= (i32)sizeof(job->response) - 1) {
             close(job->fd);
             job->fd = -1;
             job->err_kind = ERR_OTHER;
@@ -637,7 +644,7 @@ static void service_job(Job *job) {
             job->fd = -1;
             job->response[job->response_len] = '\0';
 
-            s32 status;
+            i32 status;
             char *body;
             if(response_complete(job, &status, &body)) {
                 finish_with_status(job, status, body);
@@ -649,10 +656,10 @@ static void service_job(Job *job) {
             return;
         }
 
-        job->response_len += (s32)n;
+        job->response_len += (i32)n;
         job->response[job->response_len] = '\0';
 
-        s32 status;
+        i32 status;
         char *body;
         if(response_complete(job, &status, &body)) {
             close(job->fd);
@@ -663,17 +670,17 @@ static void service_job(Job *job) {
     }
 }
 
-static void run_jobs(Job *jobs, s32 n) {
+internal void run_jobs(Job *jobs, i32 n) {
     for(;;) {
         struct pollfd fds[MAX_LIGHTS];
-        s32 fd_job_index[MAX_LIGHTS];
-        s32 fd_count = 0;
+        i32 fd_job_index[MAX_LIGHTS];
+        i32 fd_count = 0;
 
-        b32 all_done = true;
+        bool all_done = true;
         double next_wake = -1;
         double t = now_ms();
 
-        for(s32 i = 0; i < n; i++) {
+        for(i32 i = 0; i < n; i++) {
             Job *job = &jobs[i];
             if(job->state == JOB_DONE || job->state == JOB_FAILED) {
                 continue;
@@ -713,14 +720,14 @@ static void run_jobs(Job *jobs, s32 n) {
             continue;
         }
 
-        for(s32 k = 0; k < fd_count; k++) {
+        for(i32 k = 0; k < fd_count; k++) {
             if(fds[k].revents != 0) {
                 service_job(&jobs[fd_job_index[k]]);
             }
         }
 
         t = now_ms();
-        for(s32 i = 0; i < n; i++) {
+        for(i32 i = 0; i < n; i++) {
             Job *job = &jobs[i];
             if(job->state == JOB_DONE || job->state == JOB_FAILED) {
                 continue;
@@ -745,23 +752,23 @@ static void run_jobs(Job *jobs, s32 n) {
 }
 
 typedef struct {
-    b32 ok;
+    bool ok;
     LightDetail status;
     ErrorKind err_kind;
     char err[128];
 } LightResult;
 
-static void run_lights(const LightConfig *targets, s32 count, Method method, LightDetail *settings, LightResult *results) {
+internal void run_lights(const LightConfig *targets, i32 count, Method method, LightDetail *settings, LightResult *results) {
     // count always comes from resolve_lights, which already asserts this
     // same bound on its own out[] before returning it here.
     Job jobs[MAX_LIGHTS];
-    for(s32 i = 0; i < count; i++) {
+    for(i32 i = 0; i < count; i++) {
         job_init(&jobs[i], &targets[i], method, settings);
     }
 
     run_jobs(jobs, count);
 
-    for(s32 i = 0; i < count; i++) {
+    for(i32 i = 0; i < count; i++) {
         results[i].ok = jobs[i].ok;
         results[i].status = jobs[i].result;
         results[i].err_kind = jobs[i].err_kind;
@@ -769,7 +776,7 @@ static void run_lights(const LightConfig *targets, s32 count, Method method, Lig
     }
 }
 
-static const char *classify_error(ErrorKind kind, const char *raw) {
+internal const char *classify_error(ErrorKind kind, const char *raw) {
     switch(kind) {
         case ERR_TIMEOUT: return "timeout while connecting";
         case ERR_CLOSED: return "connection closed unexpectedly";
@@ -780,29 +787,29 @@ static const char *classify_error(ErrorKind kind, const char *raw) {
 
 // --- validation ---
 
-static b32 validate_brightness(s32 n) {
+internal bool validate_brightness(i32 n) {
     return n >= 3 && n <= 100;
 }
 
-static b32 validate_temperature(s32 n) {
+internal bool validate_temperature(i32 n) {
     return n >= 2900 && n <= 7000;
 }
 
 // --- light resolution ---
 
-static s32 resolve_lights(const LightConfig *lights, s32 count, const char *name, LightConfig *out) {
+internal i32 resolve_lights(const LightConfig *lights, i32 count, const char *name, LightConfig *out) {
     // Every call site passes a MAX_LIGHTS-sized out[]; count must never
     // exceed it or the "no filter" branch below writes past the end.
     assert(count <= MAX_LIGHTS);
 
     if(!name || *name == '\0') {
-        for(s32 i = 0; i < count; i++) {
+        for(i32 i = 0; i < count; i++) {
             out[i] = lights[i];
         }
         return count;
     }
 
-    for(s32 i = 0; i < count; i++) {
+    for(i32 i = 0; i < count; i++) {
         if(strcmp(lights[i].name, name) == 0) {
             out[0] = lights[i];
             return 1;
@@ -810,7 +817,7 @@ static s32 resolve_lights(const LightConfig *lights, s32 count, const char *name
     }
 
     fprintf(stderr, "light \"%s\" not found; available: ", name);
-    for(s32 i = 0; i < count; i++) {
+    for(i32 i = 0; i < count; i++) {
         fprintf(stderr, "%s%s", i ? ", " : "", lights[i].name);
     }
     fprintf(stderr, "\n");
@@ -819,11 +826,11 @@ static s32 resolve_lights(const LightConfig *lights, s32 count, const char *name
 
 // --- output ---
 
-static const char *format_on_off(s32 on) {
+internal const char *format_on_off(i32 on) {
     return on == 1 ? "ON" : "OFF";
 }
 
-static void print_light_result(const char *name, const char *verb, LightResult *result) {
+internal void print_light_result(const char *name, const char *verb, LightResult *result) {
     if(!result->ok) {
         printf("%s of light \"%s\": error: %s\n", verb, name, classify_error(result->err_kind, result->err));
         return;
@@ -835,7 +842,7 @@ static void print_light_result(const char *name, const char *verb, LightResult *
     printf("  Temperature: %dK\n", mired_to_kelvin(result->status.temperature));
 }
 
-static void print_usage(FILE *out) {
+internal void print_usage(FILE *out) {
     fprintf(out,
         "Usage: klair [-h] [-v] <command> [flags]\n"
         "\n"
@@ -853,7 +860,7 @@ static void print_usage(FILE *out) {
 // a bare strtol call would let all of those through. -1 is a legit value
 // here too, so whether a flag was given at all lives in CliArgs's
 // has_brightness/has_temperature, not in the value itself.
-static b32 parse_int_arg(const char *s, s32 *out) {
+internal bool parse_int_arg(const char *s, i32 *out) {
     if(*s == '\0') {
         return false;
     }
@@ -865,24 +872,24 @@ static b32 parse_int_arg(const char *s, s32 *out) {
         return false;
     }
 
-    *out = (s32)value;
+    *out = (i32)value;
     return true;
 }
 
 typedef struct {
-    b32 accept_bt;
+    bool accept_bt;
 
-    b32 has_brightness;
-    s32 brightness;
+    bool has_brightness;
+    i32 brightness;
 
-    b32 has_temperature;
-    s32 temperature;
+    bool has_temperature;
+    i32 temperature;
 
     char light_name[64];
 } CliArgs;
 
-static b32 parse_common_flags(char **args, s32 count, CliArgs *out) {
-    for(s32 i = 0; i < count; i++) {
+internal bool parse_common_flags(char **args, i32 count, CliArgs *out) {
+    for(i32 i = 0; i < count; i++) {
         if(out->accept_bt && strcmp(args[i], "-b") == 0) {
             if(i + 1 >= count || !parse_int_arg(args[++i], &out->brightness)) {
                 return false;
@@ -908,10 +915,10 @@ static b32 parse_common_flags(char **args, s32 count, CliArgs *out) {
 
 // Shared by every command: resolve the targeted lights, run the request
 // against each in parallel, and print each one's result.
-static b32 run_command(const LightConfig *lights, s32 light_count, const char *light_name,
+internal bool run_command(const LightConfig *lights, i32 light_count, const char *light_name,
         Method method, LightDetail *settings, const char *verb) {
     LightConfig targets[MAX_LIGHTS];
-    s32 target_count = resolve_lights(lights, light_count, light_name, targets);
+    i32 target_count = resolve_lights(lights, light_count, light_name, targets);
     if(target_count == 0) {
         return false;
     }
@@ -919,8 +926,8 @@ static b32 run_command(const LightConfig *lights, s32 light_count, const char *l
     LightResult results[MAX_LIGHTS];
     run_lights(targets, target_count, method, settings, results);
 
-    b32 all_ok = true;
-    for(s32 i = 0; i < target_count; i++) {
+    bool all_ok = true;
+    for(i32 i = 0; i < target_count; i++) {
         print_light_result(targets[i].name, verb, &results[i]);
         all_ok = all_ok && results[i].ok;
     }
@@ -928,11 +935,11 @@ static b32 run_command(const LightConfig *lights, s32 light_count, const char *l
     return all_ok;
 }
 
-static b32 cmd_status(const LightConfig *lights, s32 light_count, const CliArgs *a) {
+internal bool cmd_status(const LightConfig *lights, i32 light_count, const CliArgs *a) {
     return run_command(lights, light_count, a->light_name, METHOD_GET, nullptr, "Status");
 }
 
-static b32 cmd_on(const LightConfig *lights, s32 light_count, const CliArgs *a) {
+internal bool cmd_on(const LightConfig *lights, i32 light_count, const CliArgs *a) {
     LightDetail settings = {.on = 1, .brightness = UNSET, .temperature = UNSET};
 
     if(a->has_brightness) {
@@ -954,7 +961,7 @@ static b32 cmd_on(const LightConfig *lights, s32 light_count, const CliArgs *a) 
     return run_command(lights, light_count, a->light_name, METHOD_PUT, &settings, "Update");
 }
 
-static b32 cmd_off(const LightConfig *lights, s32 light_count, const CliArgs *a) {
+internal bool cmd_off(const LightConfig *lights, i32 light_count, const CliArgs *a) {
     LightDetail settings = {.on = 0, .brightness = UNSET, .temperature = UNSET};
 
     return run_command(lights, light_count, a->light_name, METHOD_PUT, &settings, "Update");
@@ -966,7 +973,7 @@ typedef enum {
     CMD_OFF,
 } Command;
 
-static b32 parse_command(const char *s, Command *out) {
+internal bool parse_command(const char *s, Command *out) {
     if(strcmp(s, "status") == 0) {
         *out = CMD_STATUS;
         return true;
@@ -983,6 +990,10 @@ static b32 parse_command(const char *s, Command *out) {
 }
 
 int main(int argc, char **argv) {
+    if (BUILD_DEBUG) {
+        printf("[debug build]\n");
+    }
+
     // A light dropping the connection mid-write would otherwise kill us
     // with SIGPIPE before write()'s EPIPE ever reaches our error path.
     signal(SIGPIPE, SIG_IGN);
@@ -1004,7 +1015,7 @@ int main(int argc, char **argv) {
     }
 
     LightConfig lights[MAX_LIGHTS];
-    s32 light_count = 0;
+    i32 light_count = 0;
     if(!load_config(config_path, lights, MAX_LIGHTS, &light_count)) {
         fprintf(stderr, "error loading config: %s\n", config_path);
         return 1;
@@ -1012,7 +1023,7 @@ int main(int argc, char **argv) {
 
     const char *command_name = "status";
     char **cmd_args = nullptr;
-    s32 cmd_arg_count = 0;
+    i32 cmd_arg_count = 0;
     if(argc >= 2) {
         command_name = argv[1];
         cmd_args = argv + 2;
@@ -1032,7 +1043,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    b32 ok = false;
+    bool ok = false;
     switch(command) {
     case CMD_STATUS:
         ok = cmd_status(lights, light_count, &a);
