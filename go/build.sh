@@ -44,7 +44,7 @@ case "$action" in
         exit 0
         ;;
     test)
-        exec go test -v -race -buildvcs ./...
+        exec go test -v -race ./...
         ;;
 esac
 
@@ -56,11 +56,11 @@ fi
 
 # --- Flags -------------------------------------------------------------------
 build_debug=""
-build_release="-s -w -trimpath"
+build_release="w -trimpath"
 
 linker_common="-X main.BUILD_GIT_HASH=$git_hash"
 linker_debug="-X main.BUILD_DEBUG=true"
-linker_release="-X main.BUILD_DEBUG=false"
+linker_release="-s -w -X main.BUILD_DEBUG=false"
 
 # --- Choose Flags ------------------------------------------------------------
 case "$mode" in

@@ -1,8 +1,12 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 const (
@@ -15,6 +19,12 @@ var (
 	BUILD_GIT_HASH = ""
 	BUILD_DEBUG    = "true"
 )
+
+func assert(cond bool, msg string) {
+	if !cond {
+		panic("assertion failed: " + msg)
+	}
+}
 
 func buildVersionFull() string {
 	s := BUILD_NAME + " version " + BUILD_VERSION
@@ -39,12 +49,48 @@ Commands:
 No command: same as status.
 `
 
-func main() {
-	if BUILD_DEBUG == "true" {
-		fmt.Println("[debug build]")
+const (
+	BRIGHTNESS_MIN  = 3
+	BRIGHTNESS_MAX  = 100
+	TEMPERATURE_MIN = 2900 // Kelvin
+	TEMPERATURE_MAX = 7000
+)
+
+type Flags struct {
+	LightName   string // "" means all lights
+	Brightness  int    // 0 means not given
+	Temperature int    // Kelvin, 0 means not given
+}
+
+func parseFlags(command string, args []string) (Flags, bool) {
+	var flags Flags
+
+	fs := flag.NewFlagSet(command, flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // we print our own usage
+	fs.StringVar(&flags.LightName, "l", "", "")
+	if command == "on" {
+		fs.IntVar(&flags.Brightness, "b", 0, "")
+		fs.IntVar(&flags.Temperature, "t", 0, "")
 	}
 
-	os.Exit(run(os.Args[1:]))
+	if err := fs.Parse(args); err != nil {
+		return Flags{}, false
+	}
+	if fs.NArg() != 0 {
+		return Flags{}, false
+	}
+
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+
+	if given["b"] && flags.Brightness < BRIGHTNESS_MIN || flags.Brightness > BRIGHTNESS_MAX {
+		return Flags{}, false
+	}
+	if given["t"] && flags.Temperature < TEMPERATURE_MIN || flags.Temperature > TEMPERATURE_MAX {
+		return Flags{}, false
+	}
+
+	return flags, true
 }
 
 func run(args []string) int {
@@ -58,14 +104,56 @@ func run(args []string) int {
 		return 0
 	}
 
-	// HOME on macOS and Linux, USERPROFILE on Windows
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "cannot determine home directory")
+	command := "status"
+	flagArgs := args
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		command, flagArgs = args[0], args[1:]
+	}
+
+	if command != "status" && command != "on" && command != "off" {
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", command)
+		fmt.Fprint(os.Stderr, usage)
 		return 1
 	}
 
-	fmt.Println(home)
+	flags, ok := parseFlags(command, flagArgs)
+	if !ok {
+		fmt.Fprint(os.Stderr, usage)
+		return 1
+	}
+
+	fmt.Println(flags)
+
+	configHome, err := configDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cannot determine config directory: %v\n", err)
+		return 1
+	}
+	configPath := filepath.Join(configHome, "klair")
+
+	configText, err := os.ReadFile(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading config: %v\n", err)
+		return 1
+	}
+
+	lights, err := parseConfig(string(configText))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error parsing config %s: %v\n", configPath, err)
+		return 1
+	}
+	if len(lights) == 0 {
+		fmt.Fprintf(os.Stderr, "no lights in config: %s\n", configPath)
+		return 1
+	}
 
 	return 0
+}
+
+func main() {
+	if BUILD_DEBUG == "true" {
+		fmt.Fprintln(os.Stderr, "[debug build]")
+	}
+
+	os.Exit(run(os.Args[1:]))
 }
