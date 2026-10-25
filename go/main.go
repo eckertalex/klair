@@ -5,8 +5,29 @@ import (
 	"os"
 )
 
-var VERSION = "v0.0.0"
-var DEBUG = "false"
+const (
+	BUILD_NAME    = "klair"
+	BUILD_VERSION = "0.1.0"
+	BUILD_LANG    = "go"
+)
+
+var (
+	BUILD_GIT_HASH = ""
+	BUILD_DEBUG    = "true"
+)
+
+func buildVersionFull() string {
+	s := BUILD_NAME + " version " + BUILD_VERSION
+	if BUILD_GIT_HASH != "" {
+		s += ":" + BUILD_GIT_HASH
+	}
+	if BUILD_DEBUG == "true" {
+		s += ":debug"
+	}
+	return s + " (" + BUILD_LANG + ")"
+}
+
+var BUILD_VERSION_FULL = buildVersionFull()
 
 var usage = `Usage: klair [-h] [-v] <command> [flags]
 
@@ -19,7 +40,7 @@ No command: same as status.
 `
 
 func main() {
-	if DEBUG == "true" {
+	if BUILD_DEBUG == "true" {
 		fmt.Println("[debug build]")
 	}
 
@@ -33,7 +54,7 @@ func run(args []string) int {
 	}
 
 	if len(args) > 0 && args[0] == "-v" {
-		fmt.Println(VERSION)
+		fmt.Println(BUILD_VERSION_FULL)
 		return 0
 	}
 

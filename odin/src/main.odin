@@ -4,7 +4,24 @@ import "core:fmt"
 import vmem "core:mem/virtual"
 import "core:os"
 
-VERSION :: #config(KLAIR_VERSION, "v0.0.0")
+BUILD_NAME :: "klair"
+BUILD_VERSION :: "0.1.0"
+BUILD_GIT_HASH :: #config(BUILD_GIT_HASH, "")
+BUILD_LANG :: "odin"
+
+when BUILD_GIT_HASH != "" {
+    BUILD_GIT_HASH_APPEND :: ":" + BUILD_GIT_HASH
+} else {
+    BUILD_GIT_HASH_APPEND :: ""
+}
+
+when ODIN_DEBUG {
+    BUILD_DEBUG_APPEND :: ":debug"
+} else {
+    BUILD_DEBUG_APPEND :: ""
+}
+
+BUILD_VERSION_FULL :: BUILD_NAME + " version " + BUILD_VERSION + BUILD_GIT_HASH_APPEND + BUILD_DEBUG_APPEND + " (" + BUILD_LANG + ")"
 
 USAGE :: `Usage: klair [-h] [-v] <command> [flags]
 
@@ -48,7 +65,7 @@ run :: proc(args: []string) -> int {
     }
 
     if len(args) > 0 && args[0] == "-v" {
-        fmt.println(VERSION)
+        fmt.println(BUILD_VERSION_FULL)
         return 0
     }
 
