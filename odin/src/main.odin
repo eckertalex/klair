@@ -5,7 +5,7 @@ import vmem "core:mem/virtual"
 import "core:os"
 
 BUILD_NAME :: "klair"
-BUILD_VERSION :: "0.1.0"
+BUILD_VERSION :: "0.4.0"
 BUILD_GIT_HASH :: #config(BUILD_GIT_HASH, "")
 BUILD_LANG :: "odin"
 

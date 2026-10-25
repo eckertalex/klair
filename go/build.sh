@@ -56,7 +56,7 @@ fi
 
 # --- Flags -------------------------------------------------------------------
 build_debug=""
-build_release="w -trimpath"
+build_release="-trimpath"
 
 linker_common="-X main.BUILD_GIT_HASH=$git_hash"
 linker_debug="-X main.BUILD_DEBUG=true"
