@@ -30,16 +30,13 @@ if [ "$action" != "run" ] && [ "$#" -gt 0 ]; then
     exit 2
 fi
 
-# --- Git Commit ID -----------------------------------------------------------
-git_hash=""
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git_hash=$(git describe --always --dirty --exclude '*')
-fi
+# --- Version -----------------------------------------------------------------
+version="$(git describe --tags --always --dirty 2>/dev/null || echo unknown)"
 
 # --- Flags -------------------------------------------------------------------
 cc_cflags_gcc=""
-cc_cflags_clang=""
-cc_common="-std=c23 -Isrc -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wundef -Wno-unused-function -DBUILD_GIT_HASH=\"$git_hash\""
+cc_cflags_clang="-fdiagnostics-absolute-paths"
+cc_common="-std=c23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wundef -Wno-unused-function -DKLAIR_VERSION=\"$version\""
 cc_debug="-O0 -g -DBUILD_DEBUG=1 $cc_common"
 cc_release="-O2 -g -DBUILD_DEBUG=0 $cc_common"
 
@@ -54,10 +51,9 @@ fi
 
 # --- Build -------------------------------------------------------------------
 mkdir -p build
-$compile src/klair/klair_main.c -o build/klair
+$compile klair.c -o build/klair
 
 # --- Run ---------------------------------------------------------------------
 if [ "$action" = "run" ]; then
     exec ./build/klair "$@"
 fi
-
