@@ -1,6 +1,6 @@
 # klair CLI spec
 
-What every klair implementation (`c/`, `odin/`, `go/`) does. If two implementations differ on anything this spec defines, that's a bug in at least one of them. The fake-lights check the implementations against this spec.
+What every klair implementation (`c/`, `odin/`, `go/`) does. If two implementations differ on anything this spec defines, that's a bug in at least one of them. The [conformance suite](../conformance) checks the implementations against this spec: `./build.sh check`.
 
 **Strict about gaps, loose about additions.** Everything the spec defines must work exactly as written. An implementation may accept more than the spec requires when that comes from its standard library, like a `+4` for `-t` or `127.1` as an address, as long as the extra input means what the user typed. Where the spec says an input _must_ be rejected, it's because accepting it would do the wrong thing.
 
@@ -161,8 +161,8 @@ Line numbers start at 1 and count every line, including empty lines and comments
 
 Request rules:
 
-- HTTP/1.0 or HTTP/1.1. With 1.1 the request must send `Connection: close`.
-- `Host: <ip>` or `Host: <ip>:<port>`, an IPv6 address in brackets either way. Required for 1.1, recommended for 1.0.
+- `HTTP/1.1` with `Connection: close`. One request per connection, and the close tells the light not to wait for another. It's what c-legacy sends, which works with real lights.
+- `Host: <ip>` or `Host: <ip>:<port>`, an IPv6 address in brackets either way.
 - A `PUT` sends `Content-Type: application/json` and a correct `Content-Length`.
 - Other headers are allowed and ignored.
 
@@ -379,5 +379,4 @@ $ echo $?
 
 ## Not yet verified on real lights
 
-- **HTTP/1.0.** Every HTTP/1.1 server has to accept 1.0 requests and close the connection after answering. The fake lights do. Real lights haven't been tried yet. Try `status` first: if it hangs until `timed out`, the lights keep the connection open, and implementations need to send 1.1 with `Connection: close`.
 - **The mired range.** 143 to 344 is what the Elgato apps and community docs use. What a real light does with 345 hasn't been tested.

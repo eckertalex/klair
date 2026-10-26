@@ -70,7 +70,7 @@ Port 9123 is what the lights listen on. Their IP addresses are in the Elgato Con
 
 ### Features
 
-Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes its [fake lights](docs/fake-lights.md) cases.
+Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes every [conformance](#testing) case.
 
 #### `c`
 
@@ -89,7 +89,7 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes its [fake lig
 - [ ] Retries and timeouts
 - [ ] Light error messages
 - [ ] Unit tests
-- [ ] All fake lights cases pass
+- [ ] All conformance cases pass
 - [ ] Builds and runs on Linux
 - [ ] Builds and runs on Windows
 
@@ -110,7 +110,7 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes its [fake lig
 - [ ] Retries and timeouts
 - [ ] Light error messages
 - [ ] Unit tests
-- [ ] All fake lights cases pass
+- [ ] All conformance cases pass
 - [ ] Builds and runs on Linux
 - [ ] Builds and runs on Windows
 
@@ -131,15 +131,15 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes its [fake lig
 - [ ] Retries and timeouts
 - [ ] Light error messages
 - [ ] Unit tests
-- [ ] All fake lights cases pass
+- [ ] All conformance cases pass
 - [ ] Builds and runs on Linux
 - [ ] Builds and runs on Windows
 
 #### Testing
 
-- [ ] Fake lights server
-- [ ] `check.sh` and the cases
-- [ ] One command that builds everything and runs every check
+- [ ] Fake lights
+- [ ] Conformance checker and the cases
+- [ ] `./build.sh check` builds everything and runs every case
 
 ## Build
 
@@ -148,6 +148,8 @@ Each folder has a `build.sh` that builds into its own `build/` folder. No make, 
 ```sh
 ./build.sh                  # c, odin and go, debug
 ./build.sh release          # c, odin and go, release
+./build.sh go test          # name implementations first to pick them
+./build.sh check            # build, then run the conformance cases
 
 c/build.sh release          # c/build/klair
 odin/build.sh release       # odin/build/klair
@@ -174,9 +176,17 @@ cp c-legacy/build/klair ~/.local/bin/
 
 ## Testing
 
-The [fake lights](docs/fake-lights.md) are a fake Elgato light server in Odin. Each fake light misbehaves differently: drops a connection, answers slowly, answers garbage, never answers. A check script runs a klair binary through every case and compares stdout, stderr, exit code and the requests the lights received against the spec. That's what keeps three implementations in line.
+[`conformance/`](conformance/) is one Odin program with fake Elgato lights on localhost and a checker. Each fake light misbehaves differently: drops a connection, answers slowly, answers garbage, never answers. The checker runs klair binaries through every case and compares stdout, stderr, exit code, the requests the lights received and timing against the spec. That's what keeps three implementations in line.
 
-Unit tests run with `<folder>/build.sh test`.
+```sh
+./build.sh check                   # c, go and odin
+./build.sh go odin check -q        # only these, without the 10 s case
+./build.sh c check -run config     # only cases with "config" in their name
+./build.sh check release           # release builds
+conformance/build/conformance serve  # only the lights, to try klair by hand
+```
+
+Unit tests run with `<folder>/build.sh test` for `odin`, `go` and `conformance`, or `./build.sh odin go test`.
 
 ## History
 
