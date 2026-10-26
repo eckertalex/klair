@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 case "${1:-build}" in
     build)
         mkdir -p build
-        exec odin build src -vet -out:build/fake_lights
+        exec odin build src -vet -out:build/conformance
         ;;
     test)
         exec odin test src -vet

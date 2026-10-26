@@ -1,4 +1,4 @@
-package fake_lights
+package conformance
 
 Light_State :: struct {
 	on:          int,
