@@ -32,8 +32,6 @@
 # error Unsupported architecture
 #endif
 
-#define LANG_C 1
-
 /////////////////////////
 // Build Option Cracking
 
@@ -50,25 +48,21 @@
 #endif
 
 #if defined(BUILD_GIT_HASH)
-# define BUILD_GIT_HASH_APPEND ":" BUILD_GIT_HASH
+# define BUILD_GIT_HASH_APPEND "+" BUILD_GIT_HASH
 #else
 # define BUILD_GIT_HASH_APPEND ""
 #endif
 
 #if BUILD_DEBUG
-# define BUILD_DEBUG_APPEND ":debug"
+# define BUILD_DEBUG_APPEND ", debug"
 #else
 # define BUILD_DEBUG_APPEND ""
 #endif
 
-#if defined(LANG_C)
-# define BUILD_LANG_APPEND " (c)"
-#else
-# define BUILD_LANG_APPEND ""
-#endif
+#define BUILD_LANG "c"
 
 #define BUILD_VERSION_FULL \
-    BUILD_NAME " version " BUILD_VERSION BUILD_GIT_HASH_APPEND BUILD_DEBUG_APPEND BUILD_LANG_APPEND
+    BUILD_NAME " version " BUILD_VERSION BUILD_GIT_HASH_APPEND " (" BUILD_LANG BUILD_DEBUG_APPEND ")"
 
 //////////////////////////////
 // Zero All Undefined Options

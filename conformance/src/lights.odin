@@ -1,3 +1,16 @@
+package conformance
+
+import "core:fmt"
+import "core:net"
+import "core:os"
+import "core:slice"
+import "core:strings"
+import "core:sync"
+import "core:thread"
+import "core:time"
+
+// The lights: one thread per light, blocking sockets, one connection at a
+// time. klair never sends one light two requests at once.
 
 Behavior :: enum {
     Normal,    // answers with a Content-Length
@@ -36,7 +49,6 @@ LIGHT_PORTS :: [Behavior]int {
     .Silent    = 19131,
 }
 
-CONTROL_PORT :: 19100
 MAX_REQUEST :: 64 * 1024
 // Shorter than klair's 3s per attempt, so a request that stops halfway is
 // reported before klair gives up on it
@@ -50,34 +62,30 @@ Server :: struct {
     states:        [Behavior]Light_State,
     flaky_dropped: bool, // since the last reset
     log:           strings.Builder,
+    echo:          bool, // also print each log line, for serve
 }
 
 server: Server
 
-listen :: proc(port: int) -> net.TCP_Socket {
-    listener, err := net.listen_tcp({net.IP4_Loopback, port})
-    ensure(err == nil, fmt.tprintf("listening on %d: %v", port, err))
-    return listener
-}
+start_lights :: proc() {
+    server.log = strings.builder_make()
+    reset_lights()
 
-// One thread per light, one connection at a time. klair never sends a light
-// two requests at once.
-serve_light :: proc(listener: net.TCP_Socket, behavior: Behavior) {
-    for {
-        client, _, err := net.accept_tcp(listener)
-        if err != nil {
-            continue
-        }
-        net.set_option(client, .Receive_Timeout, READ_TIMEOUT)
-        // handle_light(client, behavior)
-        fmt.println("TODO: implement handle_light")
-        net.close(client)
-        free_all(context.temp_allocator)
+    for port, behavior in LIGHT_PORTS {
+        listener, err := net.listen_tcp({net.IP4_Loopback, port})
+		if err != nil {
+			fmt.eprintfln("cannot listen on port %d: %v. Is conformance serve still running?", port, err)
+			os.exit(2)
+		}
+
+		thread.create_and_start_with_poly_data2(listener, behavior, serve_light)
     }
 }
 
-// Call with server.lock held, or before the threads start
-reset :: proc() {
+// Every light back to its default state, flaky drops its next connection
+// again, the log is emptied
+reset_lights :: proc() {
+    sync.guard(&server.lock)
 	for &state in server.states {
 		state = DEFAULT_STATE
 	}
@@ -85,16 +93,31 @@ reset :: proc() {
 	strings.builder_reset(&server.log)
 }
 
-serve_control :: proc(listener: net.TCP_Socket) {
-	for {
-		client, _, err := net.accept_tcp(listener)
-		if err != nil {
-			continue
-		}
-		net.set_option(client, .Receive_Timeout, READ_TIMEOUT)
-		// handle_control(client)
-        fmt.println("TODO: implement handle_control")
-		net.close(client)
-		free_all(context.temp_allocator)
+// Every request since the last reset, one per line, sorted: requests to
+// different lights arrive in any order
+light_log :: proc(allocator := context.temp_allocator) -> []string {
+	sync.guard(&server.lock)
+	text := strings.trim_suffix(strings.to_string(server.log), "\n")
+	if text == "" {
+		return nil
 	}
+	lines := strings.split_lines(strings.clone(text, allocator), allocator)
+	slice.sort(lines)
+	return lines
+}
+
+
+serve_light :: proc(listener: net.TCP_Socket, behavior: Behavior) {
+    for {
+        client, _, err := net.accept_tcp(listener)
+        if err != nil {
+            continue
+        }
+
+        net.set_option(client, .Receive_Timeout, READ_TIMEOUT)
+        // handle_light(client, behavior)
+        fmt.println("TODO: implement handle_light")
+        net.close(client)
+        free_all(context.temp_allocator)
+    }
 }

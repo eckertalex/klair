@@ -18,24 +18,21 @@ serve  runs the lights and prints every request they get`
 main :: proc() {
     args := os.args[1:]
     if len(args) == 0 {
-        fmt.eprintln(USAGE)
-        os.exit(2)
+        fail_usage()
     }
 
     switch args[0] {
     case "check":
         options, ok := parse_check_args(args[1:])
         if !ok {
-            fmt.eprintln(USAGE)
-            os.exit(2)
+            fail_usage()
         }
 
         start_lights()
         os.exit(check(options) ? 0 : 1)
     case "serve":
         if len(args) > 1 {
-            fmt.eprintln(USAGE)
-            os.exit(2)
+            fail_usage()
         }
 
         server.echo = true
@@ -46,8 +43,12 @@ main :: proc() {
             time.sleep(time.Hour)
         }
     case:
-        fmt.eprintln(USAGE)
-        os.exit(2)
+        fail_usage()
     }
+}
+
+fail_usage :: proc() -> ! {
+    fmt.eprintln(USAGE)
+    os.exit(2)
 }
 
