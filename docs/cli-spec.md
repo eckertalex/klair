@@ -1,6 +1,6 @@
 # klair CLI spec
 
-What every klair implementation (`c/`, `odin/`, `go/`) does. If two implementations differ on anything this spec defines, that's a bug in at least one of them. The [conformance suite](../conformance) checks the implementations against this spec: `./build.sh check`.
+What every klair implementation (`c/`, `odin/`, `go/`) does. If two implementations differ on anything this spec defines, that's a bug in at least one of them. The [conformance suite](../conformance) checks the implementations against this spec: `./check.sh`.
 
 **Strict about gaps, loose about additions.** Everything the spec defines must work exactly as written. An implementation may accept more than the spec requires when that comes from its standard library, like a `+4` for `-t` or `127.1` as an address, as long as the extra input means what the user typed. Where the spec says an input _must_ be rejected, it's because accepting it would do the wrong thing.
 

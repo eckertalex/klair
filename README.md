@@ -139,7 +139,7 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes every [confor
 
 - [ ] Fake lights
 - [ ] Conformance checker and the cases
-- [ ] `./build.sh check` builds everything and runs every case
+- [ ] `./check.sh` builds everything and runs every case
 
 ## Build
 
@@ -149,7 +149,7 @@ Each folder has a `build.sh` that builds into its own `build/` folder. No make, 
 ./build.sh                  # c, odin and go, debug
 ./build.sh release          # c, odin and go, release
 ./build.sh go test          # name implementations first to pick them
-./build.sh check            # build, then run the conformance cases
+./check.sh                  # build, then run the conformance cases
 
 c/build.sh release          # c/build/klair
 odin/build.sh release       # odin/build/klair
@@ -179,10 +179,10 @@ cp c-legacy/build/klair ~/.local/bin/
 [`conformance/`](conformance/) is one Odin program with fake Elgato lights on localhost and a checker. Each fake light misbehaves differently: drops a connection, answers slowly, answers garbage, never answers. The checker runs klair binaries through every case and compares stdout, stderr, exit code, the requests the lights received and timing against the spec. That's what keeps three implementations in line.
 
 ```sh
-./build.sh check                   # c, go and odin
-./build.sh go odin check -q        # only these, without the 10 s case
-./build.sh c check -run config     # only cases with "config" in their name
-./build.sh check release           # release builds
+./check.sh                   # c, go and odin
+./check.sh go odin -q        # only these, without the 10 s case
+./check.sh c -run config     # only cases with "config" in their name
+./check.sh release           # release builds
 conformance/build/conformance serve  # only the lights, to try klair by hand
 ```
 

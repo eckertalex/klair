@@ -1,4 +1,4 @@
-vim.opt.makeprg = "./conformance/build.sh"
+vim.opt.makeprg = "./check.sh"
 
 vim.opt.errorformat = {
 	"%f(%l:%c) Error: %m",
