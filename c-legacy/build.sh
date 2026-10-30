@@ -1,59 +1,25 @@
 #!/bin/sh
+# usage: ./build.sh [debug|release]
+# CC picks the compiler, clang by default
 set -eu
 
 cd "$(dirname "$0")"
 
-# --- Arguments ---------------------------------------------------------------
-mode="debug"
-compiler="clang"
-action="build"
+flags="-std=c23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wundef -Wno-unused-function"
+case "${1:-debug}" in
+    debug) flags="$flags -O0 -g -DBUILD_DEBUG=1" ;;
+    release) flags="$flags -O2 -g -DBUILD_DEBUG=0" ;;
+    *)
+        echo "usage: $0 [debug|release]" >&2
+        exit 2
+        ;;
+esac
 
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        debug|release) mode="$1" ;;
-        clang|gcc|cc) compiler="$1" ;;
-        build|run) action="$1" ;;
-        --)
-            shift
-            break
-            ;;
-        *)
-            echo "usage: $0 [debug|release] [clang|gcc|cc] [build|run] [-- args...]" >&2
-            exit 2
-            ;;
-    esac
-    shift
-done
-
-if [ "$action" != "run" ] && [ "$#" -gt 0 ]; then
-    echo "error: program arguments require the 'run' action" >&2
-    exit 2
+# Outside a git checkout the version string has no hash
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    flags="$flags -DBUILD_GIT_HASH=\"$(git describe --always --dirty --exclude '*')\""
 fi
 
-# --- Version -----------------------------------------------------------------
-version="$(git describe --tags --always --dirty 2>/dev/null || echo unknown)"
-
-# --- Flags -------------------------------------------------------------------
-cc_cflags_gcc=""
-cc_cflags_clang="-fdiagnostics-absolute-paths"
-cc_common="-std=c23 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wundef -Wno-unused-function -DKLAIR_VERSION=\"$version\""
-cc_debug="-O0 -g -DBUILD_DEBUG=1 $cc_common"
-cc_release="-O2 -g -DBUILD_DEBUG=0 $cc_common"
-
-# --- Choose Flags ------------------------------------------------------------
-if   [ "$compiler" = "gcc" ];   then echo "[gcc compile]";   cc_compiler="${CC:-gcc} $cc_cflags_gcc"
-elif [ "$compiler" = "clang" ]; then echo "[clang compile]"; cc_compiler="${CC:-clang} $cc_cflags_clang"
-elif [ "$compiler" = "cc" ];    then echo "[cc compile]";    cc_compiler="${CC:-cc}"
-fi
-if   [ "$mode" = "debug" ];   then echo "[debug mode]";   compile="$cc_compiler $cc_debug"
-elif [ "$mode" = "release" ]; then echo "[release mode]"; compile="$cc_compiler $cc_release"
-fi
-
-# --- Build -------------------------------------------------------------------
+# Absolute paths, so errors resolve from the repo root too
 mkdir -p build
-$compile klair.c -o build/klair
-
-# --- Run ---------------------------------------------------------------------
-if [ "$action" = "run" ]; then
-    exec ./build/klair "$@"
-fi
+${CC:-clang} $flags "$PWD/klair.c" -o build/klair

@@ -19,11 +19,10 @@ done
 impls="${impls:-c go odin}"
 
 # --- Build -------------------------------------------------------------------
-# Only stdout is dropped, so warnings and errors still show
-conformance/build.sh build >/dev/null
+conformance/build.sh build
 binaries=""
 for impl in $impls; do
-    "$impl"/build.sh "$mode" build >/dev/null
+    "$impl"/build.sh "$mode"
     binaries="$binaries $impl/build/klair"
 done
 

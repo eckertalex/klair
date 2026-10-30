@@ -18,11 +18,12 @@ Case :: struct {
 
 // One klair invocation
 Run :: struct {
-	args:           []string,
-	exit:           int,
-	stdout:         string,
-	stdout_pattern: string, // instead of stdout: a regex its one line must match
-	stderr:         string, // $CONFIG stands for the config file's path
+	args:            []string,
+	exit:            int,
+	stdout:          string,
+	stdout_pattern:  string, // instead of stdout: a regex its one line must match
+	stderr:          string, // $CONFIG stands for the config file's path
+	stderr_mentions: string, // instead of stderr: a usage error in the flag parser's own words, naming this
 }
 
 DEFAULT_CONFIG :: `normal = 127.0.0.1:19123
@@ -192,21 +193,22 @@ CASES := []Case {
 	// --- Usage errors: exit 2, the message and the usage text on stderr ---
 
 	{name = "unknown-command", runs = {{args = {"bogus"}, exit = 2, stderr = "unknown command: bogus\n\n" + KLAIR_USAGE}}},
-	{name = "flag-for-another-command", runs = {{args = {"status", "-b", "50"}, exit = 2, stderr = "unknown flag for status: -b\n\n" + KLAIR_USAGE}}},
-	{name = "flag-for-default-command", runs = {{args = {"-b", "50"}, exit = 2, stderr = "unknown flag for status: -b\n\n" + KLAIR_USAGE}}},
-	{name = "unknown-flag", runs = {{args = {"off", "-x"}, exit = 2, stderr = "unknown flag for off: -x\n\n" + KLAIR_USAGE}}},
+	{name = "flag-for-another-command", runs = {{args = {"status", "-b", "50"}, exit = 2, stderr_mentions = "-b"}}},
+	{name = "flag-for-default-command", runs = {{args = {"-b", "50"}, exit = 2, stderr_mentions = "-b"}}},
+	{name = "unknown-flag", runs = {{args = {"off", "-x"}, exit = 2, stderr_mentions = "-x"}}},
 	{name = "unexpected-argument", runs = {{args = {"status", "extra"}, exit = 2, stderr = "unexpected argument: extra\n\n" + KLAIR_USAGE}}},
-	{name = "dash-h", runs = {{args = {"-h"}, exit = 2, stderr = "unknown flag for status: -h\n\n" + KLAIR_USAGE}}},
-	{name = "dash-dash-help", runs = {{args = {"--help"}, exit = 2, stderr = "unknown flag for status: --help\n\n" + KLAIR_USAGE}}},
+	{name = "dash-v", runs = {{args = {"-v"}, exit = 2, stderr_mentions = "-v"}}},
+	{name = "dash-version", runs = {{args = {"-version"}, exit = 2, stderr_mentions = "-version"}}},
+	{name = "dash-dash-version", runs = {{args = {"--version"}, exit = 2, stderr_mentions = "-version"}}},
 	{name = "help-with-argument", runs = {{args = {"help", "me"}, exit = 2, stderr = "unexpected argument: me\n\n" + KLAIR_USAGE}}},
-	{name = "version-with-flag", runs = {{args = {"version", "-l", "normal"}, exit = 2, stderr = "unknown flag for version: -l\n\n" + KLAIR_USAGE}}},
-	{name = "missing-value", runs = {{args = {"on", "-b"}, exit = 2, stderr = "missing value for -b\n\n" + KLAIR_USAGE}}},
-	{name = "trailing-junk", runs = {{args = {"on", "-b", "12x"}, exit = 2, stderr = "invalid value for -b: 12x\n\n" + KLAIR_USAGE}}},
+	{name = "version-with-flag", runs = {{args = {"version", "-l", "normal"}, exit = 2, stderr_mentions = "-l"}}},
+	{name = "missing-value", runs = {{args = {"on", "-b"}, exit = 2, stderr_mentions = "-b"}}},
+	{name = "trailing-junk", runs = {{args = {"on", "-b", "12x"}, exit = 2, stderr_mentions = "12x"}}},
 	{name = "wraps-to-valid", runs = {{args = {"on", "-b", "4294967346"}, exit = 2, stderr = "invalid brightness: must be between 3 and 100\n\n" + KLAIR_USAGE}}},
 	{name = "brightness-range", runs = {{args = {"on", "-b", "2"}, exit = 2, stderr = "invalid brightness: must be between 3 and 100\n\n" + KLAIR_USAGE}}},
-	{name = "too-big-for-64-bits", runs = {{args = {"on", "-b", "18446744073709551666"}, exit = 2, stderr = "invalid value for -b: 18446744073709551666\n\n" + KLAIR_USAGE}}},
+	{name = "too-big-for-64-bits", runs = {{args = {"on", "-b", "18446744073709551666"}, exit = 2, stderr_mentions = "18446744073709551666"}}},
 	{name = "temperature-range", runs = {{args = {"on", "-t", "9000"}, exit = 2, stderr = "invalid temperature: must be between 2900K and 7000K\n\n" + KLAIR_USAGE}}},
-	{name = "flag-before-range", runs = {{args = {"on", "-b", "2", "-x"}, exit = 2, stderr = "unknown flag for on: -x\n\n" + KLAIR_USAGE}}},
+	{name = "flag-before-range", runs = {{args = {"on", "-b", "2", "-x"}, exit = 2, stderr_mentions = "-x"}}},
 
 	// --- Config ---
 

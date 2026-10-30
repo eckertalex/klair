@@ -27,12 +27,14 @@ when ODIN_DEBUG {
 // klair version 0.4.0+8b30b7a-dirty (odin, debug)
 BUILD_VERSION_FULL :: BUILD_NAME + " version " + BUILD_VERSION + BUILD_GIT_HASH_APPEND + " (" + BUILD_LANG + BUILD_DEBUG_APPEND + ")"
 
-USAGE :: `Usage: klair [-h] [-v] <command> [flags]
+USAGE :: `Usage: klair [command] [flags]
 
 Commands:
-  status  [-l NAME]
-  on      [-b 3-100] [-t 2900-7000] [-l NAME]
-  off     [-l NAME]
+  status   [-l NAME]
+  on       [-b 3-100] [-t 2900-7000] [-l NAME]
+  off      [-l NAME]
+  help
+  version
 
 No command: same as status.
 `
@@ -200,10 +202,6 @@ run :: proc(args: []string) -> int {
 }
 
 main :: proc() {
-	if ODIN_DEBUG {
-		fmt.eprintln("[debug build]")
-	}
-
     arena: vmem.Arena
 	arena_err := vmem.arena_init_growing(&arena)
     ensure(arena_err == nil)

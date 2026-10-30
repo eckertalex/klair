@@ -2,7 +2,7 @@
 
 What every klair implementation (`c/`, `odin/`, `go/`) does. If two implementations differ on anything this spec defines, that's a bug in at least one of them. The [conformance suite](../conformance) checks the implementations against this spec: `./check.sh`.
 
-**Strict about gaps, loose about additions.** Everything the spec defines must work exactly as written. An implementation may accept more than the spec requires when that comes from its standard library, like a `+4` for `-t` or `127.1` as an address, as long as the extra input means what the user typed. Where the spec says an input _must_ be rejected, it's because accepting it would do the wrong thing.
+**Strict about gaps, loose about additions.** Everything the spec defines must work exactly as written. An implementation may accept more than the spec requires when that comes from its standard library, like a `+4` for `-t` or `127.1` as an address, as long as the extra input means what the user typed. The same goes for a standard library flag parser: an implementation built on one may keep the help flag it adds, like Go's `-h`, and its wording for the errors it reports. Where the spec says an input _must_ be rejected, it's because accepting it would do the wrong thing.
 
 `c-legacy/` predates the spec and doesn't follow it. [Changes from c-legacy](#changes-from-c-legacy) lists the differences.
 
@@ -14,15 +14,14 @@ Conventions:
 
 ## Order of operations
 
-1. Debug builds print `[debug build]` to stderr, before anything else.
-2. Parse the arguments. `help` and `version` are handled here, and any usage error exits here, before the config is touched.
-3. Find, read and parse the config.
-4. Pick the target lights (`-l`).
-5. Send one request to every target light at the same time.
-6. Wait for every light to succeed or run out of attempts.
-7. Print one result per light, in config order, then exit.
+1. Parse the arguments. `help` and `version` are handled here, and any usage error exits here, before the config is touched.
+2. Find, read and parse the config.
+3. Pick the target lights (`-l`).
+4. Send one request to every target light at the same time.
+5. Wait for every light to succeed or run out of attempts.
+6. Print one result per light, in config order, then exit.
 
-Nothing is printed to stdout before step 7, apart from `help` and `version`.
+Nothing is printed to stdout before step 6, apart from `help` and `version`.
 
 ## Command line
 
@@ -42,7 +41,7 @@ klair [command] [flags]
 
 `help` and `version` don't read the config, so they work without one.
 
-There are no `-h`, `--help`, `-v` or `--version` flags. `klair -h` is `klair status -h`, an unknown flag, and the usage error prints the usage text anyway. `-v` would usually mean verbose.
+The spec defines no `-h`, `--help`, `-v` or `--version` flags. A help flag that comes with the standard library's flag parser may stay, doing what `help` does. Otherwise they're unknown flags, and the usage error prints the usage text anyway. The version is only the `version` command: `-v` would usually mean verbose.
 
 - The command is the first argument, if that argument doesn't start with `-`.
 - **No command means `status`.** That covers `klair` with no arguments and also a first argument that is a flag: `klair -l left` is `klair status -l left`.
@@ -78,6 +77,8 @@ Usage errors, checked from left to right, the first one wins:
 | `-t` out of range                                                   | `invalid temperature: must be between 2900K and 7000K` |
 
 `<command>` is the resolved command, so `klair -b 50` gives `unknown flag for status: -b`.
+
+An implementation using its standard library's flag parser may print that parser's message instead for an unknown flag, a missing value and an invalid value, as long as the message names the offending flag or value. Every other message is exactly as written.
 
 Range errors are checked after the whole argument list has parsed, `-b` before `-t`. `klair on -b 2 -x` reports the unknown flag `-x`, not the range.
 
@@ -304,7 +305,7 @@ The part before the space says which source it was built from, the part in paren
 
 ### Debug builds
 
-A debug build prints `[debug build]` to stderr as its very first output, for every invocation including `help` and `version`. On stderr, so stdout is the same in debug and release builds and scripts can parse it.
+A debug build shows only in the version string's `, debug`. It prints nothing extra, so its output is the same as a release build's.
 
 What counts as a debug build is up to each `build.sh`. Each one defaults to `debug` and takes `release`.
 
@@ -356,14 +357,13 @@ $ echo $?
 
 |                                   | c-legacy                                                                                    | spec                                                                      |
 | --------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Help and version                  | `-h` and `-v` as the first argument                                                         | `help` and `version` commands, no flags                                   |
+| Help and version                  | `-h` and `-v` as the first argument                                                         | `help` and `version` commands                                             |
 | Argument parsing                  | after reading the config, so `klair bogus` without a config complains about the config      | before, `help`, `version` and usage errors never need a config            |
 | Usage error exit code             | 1                                                                                           | 2                                                                         |
 | Usage error message               | only the usage text, except for unknown commands                                            | what went wrong, then the usage text                                      |
 | Range errors (`-b 2`)             | exit 1, no usage text                                                                       | usage error, exit 2                                                       |
 | Flags without a command           | `unknown command: -l`                                                                       | `status`                                                                  |
 | Integer parsing                   | `strtol`, which also takes leading spaces                                                   | the standard library's integer parser, then a range check, never wrapping |
-| `[debug build]`                   | stdout                                                                                      | stderr                                                                    |
 | Config location                   | `$HOME/.config/klair`                                                                       | XDG on Unix, `%APPDATA%` on Windows                                       |
 | Config comments                   | none                                                                                        | `#` lines                                                                 |
 | Config errors                     | `error loading config: <path>` for everything                                               | which line and what's wrong                                               |

@@ -19,9 +19,9 @@ impls="${impls:-c go odin}"
 # --- Build -------------------------------------------------------------------
 status=0
 for impl in $impls; do
-    echo "=== $impl ==="
+    echo "=== $impl ===" >&2
     ./"$impl"/build.sh "$@" || status=1
-    echo
+    echo >&2
 done
 
 exit "$status"

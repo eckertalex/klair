@@ -143,8 +143,7 @@ run_case :: proc(c: Case, klair: string, klair_env: Klair_Env) -> []string {
 			continue
 		}
 		stdout := string(stdout_bytes)
-		// The spec has debug builds print this first. Release builds don't.
-		stderr := strings.trim_prefix(string(stderr_bytes), "[debug build]\n")
+		stderr := string(stderr_bytes)
 
 		if state.exit_code != run.exit {
 			append(&problems, fmt.tprintf("%sexit code %d, expected %d", label, state.exit_code, run.exit))
@@ -157,7 +156,11 @@ run_case :: proc(c: Case, klair: string, klair_env: Klair_Env) -> []string {
 			append(&problems, fmt.tprintf("%sstdout:\n%s", label, diff(run.stdout, stdout)))
 		}
 		want_stderr, _ := strings.replace_all(run.stderr, "$CONFIG", klair_env.config_path, context.temp_allocator)
-		if stderr != want_stderr {
+		if run.stderr_mentions != "" {
+			if !is_usage_error_mentioning(stderr, run.stderr_mentions) {
+				append(&problems, fmt.tprintf("%sstderr isn't a usage error naming %s:\n%s", label, run.stderr_mentions, stderr))
+			}
+		} else if stderr != want_stderr {
 			append(&problems, fmt.tprintf("%sstderr:\n%s", label, diff(want_stderr, stderr)))
 		}
 	}
@@ -190,6 +193,13 @@ is_one_matching_line :: proc(text, pattern: string) -> bool {
 	ensure(err == nil, pattern)
 	_, matched := regex.match(re, line, context.temp_allocator)
 	return matched
+}
+
+// For flag parser errors: one message line naming the argument, an empty line
+// and the usage text
+is_usage_error_mentioning :: proc(text, mention: string) -> bool {
+	message, _, rest := strings.partition(text, "\n")
+	return strings.contains(message, mention) && rest == "\n" + KLAIR_USAGE
 }
 
 indent :: proc(text, prefix: string) -> string {

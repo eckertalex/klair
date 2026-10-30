@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -39,12 +41,14 @@ func buildVersionFull() string {
 	return s + ")"
 }
 
-var USAGE = `Usage: klair [-h] [-v] <command> [flags]
+var USAGE = `Usage: klair [command] [flags]
 
 Commands:
-  status  [-l NAME]
-  on      [-b 3-100] [-t 2900-7000] [-l NAME]
-  off     [-l NAME]
+  status   [-l NAME]
+  on       [-b 3-100] [-t 2900-7000] [-l NAME]
+  off      [-l NAME]
+  help
+  version
 
 No command: same as status.
 `
@@ -81,16 +85,9 @@ type Args struct {
 	Temperature *int64 // Kelvin, nil means not given
 }
 
-type Flags struct {
-	LightName   string // "" means all lights
-	Brightness  int    // 0 means not given
-	Temperature int    // Kelvin, 0 means not given
-}
-
 func parseArgs(args []string) (Args, string) {
 	var parsed Args
 
-	i := 0
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		found := false
 		for command, name := range COMMAND_NAMES {
@@ -103,43 +100,30 @@ func parseArgs(args []string) (Args, string) {
 		if !found {
 			return Args{}, "unknown command: " + args[0]
 		}
-		i = 1
+		args = args[1:]
 	}
 
-	for ; i < len(args); i += 2 {
-		flag := args[i]
-		if !strings.HasPrefix(flag, "-") {
-			return Args{}, "unexpected argument: " + flag
-		}
+	// The standard flag parser, so its -h and error messages come with it.
+	// run prints the usage, so the parser itself prints nothing.
+	fs := flag.NewFlagSet(COMMAND_NAMES[parsed.Command], flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if parsed.Command <= COMMAND_OFF {
+		fs.StringVar(&parsed.LightName, "l", "", "")
+	}
+	if parsed.Command == COMMAND_ON {
+		int64Flag(fs, "b", &parsed.Brightness)
+		int64Flag(fs, "t", &parsed.Temperature)
+	}
 
-		takesL := flag == "-l" && parsed.Command <= COMMAND_OFF
-		takesBT := (flag == "-b" || flag == "-t") && parsed.Command == COMMAND_ON
-		if !takesL && !takesBT {
-			return Args{}, "unknown flag for " + COMMAND_NAMES[parsed.Command] + ": " + flag
-		}
-
-		if i+1 >= len(args) {
-			return Args{}, "missing value for " + flag
-		}
-
-		value := args[i+1]
-		if flag == "-l" {
-			parsed.LightName = value
-			continue
-		}
-
-		// 64 bits on every platform, then the range check below on whatever
-		// parsed. ParseInt also takes "+50", which the spec allows. Both
-		// syntax errors and numbers too large for 64 bits are invalid values.
-		n, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return Args{}, "invalid value for " + flag + ": " + value
-		}
-		if flag == "-b" {
-			parsed.Brightness = &n
-		} else {
-			parsed.Temperature = &n
-		}
+	err := fs.Parse(args)
+	if errors.Is(err, flag.ErrHelp) {
+		return Args{Command: COMMAND_HELP}, ""
+	}
+	if err != nil {
+		return Args{}, err.Error()
+	}
+	if fs.NArg() > 0 {
+		return Args{}, "unexpected argument: " + fs.Arg(0)
 	}
 
 	if b := parsed.Brightness; b != nil && (*b < BRIGHTNESS_MIN || *b > BRIGHTNESS_MAX) {
@@ -150,6 +134,20 @@ func parseArgs(args []string) (Args, string) {
 	}
 
 	return parsed, ""
+}
+
+// 64 bits on every platform, then parseArgs checks the range on whatever
+// parsed. Base 10, so 010 is ten. ParseInt also takes "+50", which the spec
+// allows. Both syntax errors and numbers too large for 64 bits are invalid.
+func int64Flag(fs *flag.FlagSet, name string, value **int64) {
+	fs.Func(name, "", func(s string) error {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return errors.New("not a 64 bit integer")
+		}
+		*value = &n
+		return nil
+	})
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -195,9 +193,5 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func main() {
-	if BUILD_DEBUG == "true" {
-		fmt.Fprintln(os.Stderr, "[debug build]")
-	}
-
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }

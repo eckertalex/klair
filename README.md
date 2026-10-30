@@ -76,7 +76,6 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes every [confor
 
 - [ ] `help` and the usage text
 - [ ] `version` and the version string
-- [ ] `[debug build]` on stderr
 - [ ] Usage errors with a message, exit 2
 - [ ] Config location (XDG, `%APPDATA%`)
 - [ ] Config parsing and its errors
@@ -97,7 +96,6 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes every [confor
 
 - [ ] `help` and the usage text
 - [ ] `version` and the version string
-- [ ] `[debug build]` on stderr
 - [ ] Usage errors with a message, exit 2
 - [ ] Config location (XDG, `%APPDATA%`)
 - [ ] Config parsing and its errors
@@ -118,7 +116,6 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes every [confor
 
 - [ ] `help` and the usage text
 - [ ] `version` and the version string
-- [ ] `[debug build]` on stderr
 - [ ] Usage errors with a message, exit 2
 - [ ] Config location (XDG, `%APPDATA%`)
 - [ ] Config parsing and its errors
@@ -157,7 +154,7 @@ go/build.sh release         # go/build/klair
 c-legacy/build.sh release   # c-legacy/build/klair
 ```
 
-Every `build.sh` takes `debug` (the default) or `release`, and `run -- <args>` to build and run in one step. The C ones also take `clang` (the default), `gcc` or `cc`. Odin and Go take `test`, Go also `audit` and `tidy`.
+Every `build.sh` takes `debug` (the default) or `release`. The C ones use clang unless `CC` says otherwise, e.g. `CC=gcc c/build.sh`. Odin and Go take `test`. Go builds also run `go vet`.
 
 Needs: clang 18+ or gcc 14+ for C, a recent Odin (it uses `core:nbio`), Go from `go/go.mod`.
 

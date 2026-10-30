@@ -29,9 +29,25 @@ typedef uint8_t u8;
 typedef uint32_t u32;
 typedef int32_t i32;
 
-#ifndef KLAIR_VERSION
-#define KLAIR_VERSION "v0.0.0"
+#define BUILD_NAME "klair"
+#define BUILD_VERSION "0.4.0"
+#define BUILD_LANG "c-legacy"
+
+#if defined(BUILD_GIT_HASH)
+# define BUILD_GIT_HASH_APPEND "+" BUILD_GIT_HASH
+#else
+# define BUILD_GIT_HASH_APPEND ""
 #endif
+
+#if BUILD_DEBUG
+# define BUILD_DEBUG_APPEND ", debug"
+#else
+# define BUILD_DEBUG_APPEND ""
+#endif
+
+// klair version 0.4.0+8b30b7a-dirty (c-legacy, debug)
+#define BUILD_VERSION_FULL \
+    BUILD_NAME " version " BUILD_VERSION BUILD_GIT_HASH_APPEND " (" BUILD_LANG BUILD_DEBUG_APPEND ")"
 
 constexpr i32 MAX_LIGHTS = 16;
 constexpr i32 UNSET = -1;
@@ -990,10 +1006,6 @@ internal bool parse_command(const char *s, Command *out) {
 }
 
 int main(int argc, char **argv) {
-    if (BUILD_DEBUG) {
-        printf("[debug build]\n");
-    }
-
     // A light dropping the connection mid-write would otherwise kill us
     // with SIGPIPE before write()'s EPIPE ever reaches our error path.
     signal(SIGPIPE, SIG_IGN);
@@ -1004,7 +1016,7 @@ int main(int argc, char **argv) {
     }
 
     if(argc >= 2 && strcmp(argv[1], "-v") == 0) {
-        printf("%s\n", KLAIR_VERSION);
+        printf("%s\n", BUILD_VERSION_FULL);
         return 0;
     }
 
