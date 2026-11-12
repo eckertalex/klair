@@ -1,5 +1,4 @@
 #!/bin/sh
-# usage: ./build.sh [debug|release]
 # CC picks the compiler, clang by default
 set -eu
 

@@ -1,5 +1,4 @@
 #!/bin/sh
-# usage: ./build.sh [debug|release]
 # CC picks the compiler, clang by default
 set -eu
 
@@ -15,7 +14,6 @@ case "${1:-debug}" in
         ;;
 esac
 
-# Outside a git checkout the version string has no hash
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     flags="$flags -DBUILD_GIT_HASH=\"$(git describe --always --dirty --exclude '*')\""
 fi
