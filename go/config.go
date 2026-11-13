@@ -9,14 +9,11 @@ import (
 	"strings"
 )
 
-// Not os.UserConfigDir: on macOS that returns `~/Library/Application Support`,
-// and it errors on a relative XDG_CONFIG_HOME instead of ignoring it.
 func configDir() (string, error) {
 	if runtime.GOOS == "windows" {
 		return os.UserConfigDir() // %AppData%
 	}
 
-	// Linux, macOS, BSDs: honor XDG, fall back to ~/.config
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); filepath.IsAbs(xdg) {
 		return xdg, nil
 	}
@@ -30,16 +27,10 @@ func configDir() (string, error) {
 
 type Light struct {
 	Name    string
-	Address string // "ip:port", validated by parseConfig
+	Address string // "ip:port", as written, for the URL
+	Host    string // the ip for the Host header, bracketed for IPv6
 }
 
-// name = ip:port, one per line, blank lines ignored.
-// Rules, checked in this order for every non blank line:
-//  1. there is a '='
-//  2. name is not empty and has no spaces or tabs
-//  3. address is not empty
-//  4. address is a valid ip:port with a nonzero port
-//  5. name is not used by an earlier line
 func parseConfig(text string) ([]Light, error) {
 	var lights []Light
 
@@ -48,58 +39,63 @@ func parseConfig(text string) ([]Light, error) {
 		lineNumber++
 
 		line = strings.TrimSpace(line)
-		if line == "" {
+		if line == "" || line[0] == '#' {
 			continue
 		}
 
 		name, address, found := strings.Cut(line, "=")
 		if !found {
-			return nil, fmt.Errorf("line %d: expected name = ip:port", lineNumber)
+			return nil, configError(lineNumber, "expected name = address")
 		}
 		name = strings.TrimSpace(name)
 		address = strings.TrimSpace(address)
 
 		if name == "" {
-			return nil, fmt.Errorf("line %d: empty name", lineNumber)
+			return nil, configError(lineNumber, "empty name")
 		}
 		if strings.ContainsAny(name, " \t") {
-			return nil, fmt.Errorf("line %d: name %q contains whitespace", lineNumber, name)
+			return nil, configError(lineNumber, "name \""+name+"\" contains whitespace")
 		}
 		if address == "" {
-			return nil, fmt.Errorf("line %d: empty address", lineNumber)
+			return nil, configError(lineNumber, "empty address")
 		}
 
+		// Literals only, never a DNS lookup. Takes "[fe80::1]:9123" too.
 		addrPort, err := netip.ParseAddrPort(address)
-		if err != nil {
-			return nil, fmt.Errorf("line %d: bad address %q: %v", lineNumber, address, err)
-		}
-		if addrPort.Port() == 0 {
-			return nil, fmt.Errorf("line %d: port must not be 0", lineNumber)
+		if err != nil || addrPort.Port() == 0 {
+			return nil, configError(lineNumber, "invalid address \""+address+"\"")
 		}
 
 		for _, existing := range lights {
 			if existing.Name == name {
-				return nil, fmt.Errorf("line %d: duplicate name %q", lineNumber, name)
+				return nil, configError(lineNumber, "duplicate name \""+name+"\"")
 			}
 		}
 
-		lights = append(lights, Light{Name: name, Address: address})
+		host := addrPort.Addr().String()
+		if addrPort.Addr().Is6() {
+			host = "[" + host + "]"
+		}
+		lights = append(lights, Light{Name: name, Address: address, Host: host})
 	}
 
 	return lights, nil
 }
 
-// Empty name selects every light
-// func selectLights(lights []Light, name string) ([]Light, bool) {
-// 	if name == "" {
-// 		return lights, true
-// 	}
-//
-// 	for _, light := range lights {
-// 		if light.Name == name {
-// 			return []Light{light}, true
-// 		}
-// 	}
-//
-// 	return nil, false
-// }
+func configError(lineNumber int, problem string) error {
+	return fmt.Errorf("line %d: %s", lineNumber, problem)
+}
+
+func selectLights(lights []Light, name string, hasName bool) ([]Light, bool) {
+	if !hasName {
+		return lights, true
+	}
+
+	for i := range lights {
+		if lights[i].Name == name {
+			return lights[i : i+1], true
+		}
+	}
+
+	return nil, false
+}

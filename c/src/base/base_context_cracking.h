@@ -1,8 +1,6 @@
 #ifndef BASE_CONTEXT_CRACKING_H
 #define BASE_CONTEXT_CRACKING_H
 
-/////////////////////////////
-// Compiler/OS/Arch Cracking
 
 #if defined(__clang__)
 # define COMPILER_CLANG 1
@@ -32,8 +30,6 @@
 # error Unsupported architecture
 #endif
 
-/////////////////////////
-// Build Option Cracking
 
 #if !defined(BUILD_DEBUG)
 # define BUILD_DEBUG 1
@@ -64,8 +60,6 @@
 #define BUILD_VERSION_FULL \
     BUILD_NAME " version " BUILD_VERSION BUILD_GIT_HASH_APPEND " (" BUILD_LANG BUILD_DEBUG_APPEND ")"
 
-//////////////////////////////
-// Zero All Undefined Options
 
 #if !defined(COMPILER_CLANG)
 # define COMPILER_CLANG 0

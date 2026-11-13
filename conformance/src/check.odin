@@ -8,8 +8,6 @@ import "core:strings"
 import "core:text/regex"
 import "core:time"
 
-// The checker: runs each case against each klair binary and reports every
-// difference from what the case expects.
 
 Check_Options :: struct {
 	quick:  bool, // skip slow cases
@@ -17,8 +15,6 @@ Check_Options :: struct {
 	klairs: []string,
 }
 
-// Files klair sees. HOME is an empty folder of its own, so an implementation
-// that ignores XDG_CONFIG_HOME finds no config instead of passing by accident.
 Klair_Env :: struct {
 	config_path: string, // $CONFIG in expected output
 	env:         []string,
@@ -51,7 +47,6 @@ parse_check_args :: proc(args: []string) -> (options: Check_Options, ok: bool) {
 	return options, true
 }
 
-// One klair after the other, since they share the lights
 check :: proc(options: Check_Options) -> (all_passed: bool) {
 	dir, err := os.make_directory_temp("", "conformance-*", context.allocator)
 	ensure(err == nil, "cannot create a temporary folder")
@@ -114,7 +109,6 @@ check_klair :: proc(klair: string, options: Check_Options, klair_env: Klair_Env)
 	return totals
 }
 
-// Everything that differs from what the case expects, empty if nothing does
 run_case :: proc(c: Case, klair: string, klair_env: Klair_Env) -> []string {
 	problems: [dynamic]string
 	problems.allocator = context.temp_allocator
@@ -183,7 +177,6 @@ summary :: proc(t: Totals) -> string {
 	return fmt.tprintf("%d passed, %d failed, %d skipped", t.passed, t.failed, t.skipped)
 }
 
-// For the version string: exactly one line, matching the pattern
 is_one_matching_line :: proc(text, pattern: string) -> bool {
 	line := strings.trim_suffix(text, "\n")
 	if line == text || strings.contains(line, "\n") {
@@ -195,8 +188,6 @@ is_one_matching_line :: proc(text, pattern: string) -> bool {
 	return matched
 }
 
-// For flag parser errors: one message line naming the argument, an empty line
-// and the usage text
 is_usage_error_mentioning :: proc(text, mention: string) -> bool {
 	message, _, rest := strings.partition(text, "\n")
 	return strings.contains(message, mention) && rest == "\n" + KLAIR_USAGE

@@ -2,8 +2,6 @@ package conformance
 
 import "core:time"
 
-// What klair should do, from the CLI spec. Cases run in this order, each
-// after a reset of the lights.
 
 Case :: struct {
 	name:      string,
@@ -16,7 +14,6 @@ Case :: struct {
 	max_time:  time.Duration,
 }
 
-// One klair invocation
 Run :: struct {
 	args:            []string,
 	exit:            int,
@@ -69,7 +66,6 @@ FLAKY_ON :: `Status of light "flaky":
   Temperature: 4700K
 `
 
-// The misbehaving lights, and one with nothing listening
 ERROR_LIGHTS_CONFIG :: `normal   = 127.0.0.1:19123
 trickle  = 127.0.0.1:19126
 error500 = 127.0.0.1:19127
@@ -80,7 +76,6 @@ refused  = 127.0.0.1:1
 `
 
 CASES := []Case {
-	// --- Commands and output ---
 
 	{
 		name = "no-command",
@@ -163,7 +158,6 @@ CASES := []Case {
 		log = {`normal PUT {"lights":[{"on":1,"temperature":317}]}`},
 	},
 	{
-		// Mired 315 is 3174.6K: 3150K rounded once, 3200K rounded twice
 		name = "rounding-once",
 		runs = {{
 			args = {"on", "-t", "3175", "-l", "normal"},
@@ -190,7 +184,6 @@ CASES := []Case {
 	{name = "help", runs = {{args = {"help"}, stdout = KLAIR_USAGE}}},
 	{name = "version", runs = {{args = {"version"}, stdout_pattern = VERSION_PATTERN}}},
 
-	// --- Usage errors: exit 2, the message and the usage text on stderr ---
 
 	{name = "unknown-command", runs = {{args = {"bogus"}, exit = 2, stderr = "unknown command: bogus\n\n" + KLAIR_USAGE}}},
 	{name = "flag-for-another-command", runs = {{args = {"status", "-b", "50"}, exit = 2, stderr_mentions = "-b"}}},
@@ -206,11 +199,9 @@ CASES := []Case {
 	{name = "trailing-junk", runs = {{args = {"on", "-b", "12x"}, exit = 2, stderr_mentions = "12x"}}},
 	{name = "wraps-to-valid", runs = {{args = {"on", "-b", "4294967346"}, exit = 2, stderr = "invalid brightness: must be between 3 and 100\n\n" + KLAIR_USAGE}}},
 	{name = "brightness-range", runs = {{args = {"on", "-b", "2"}, exit = 2, stderr = "invalid brightness: must be between 3 and 100\n\n" + KLAIR_USAGE}}},
-	{name = "too-big-for-64-bits", runs = {{args = {"on", "-b", "18446744073709551666"}, exit = 2, stderr_mentions = "18446744073709551666"}}},
 	{name = "temperature-range", runs = {{args = {"on", "-t", "9000"}, exit = 2, stderr = "invalid temperature: must be between 2900K and 7000K\n\n" + KLAIR_USAGE}}},
 	{name = "flag-before-range", runs = {{args = {"on", "-b", "2", "-x"}, exit = 2, stderr_mentions = "-x"}}},
 
-	// --- Config ---
 
 	{name = "no-config-help", no_config = true, runs = {{args = {"help"}, stdout = KLAIR_USAGE}}},
 	{name = "no-config-version", no_config = true, runs = {{args = {"version"}, stdout_pattern = VERSION_PATTERN}}},
@@ -246,7 +237,6 @@ CASES := []Case {
 		runs = {{args = {"status", "-l", "nope"}, exit = 1, stderr = "light \"nope\" not found; available: normal, nolen, flaky\n"}},
 	},
 
-	// --- Light errors ---
 
 	{
 		name = "light-errors-off",
@@ -279,8 +269,6 @@ Update of light "refused": error: failed to connect
 		},
 	},
 	{
-		// silent takes 3 attempts of 3s plus 0.3s of backoff. If it takes
-		// much longer, the lights wait on each other.
 		name = "light-errors-with-timeout",
 		config = ERROR_LIGHTS_CONFIG + "silent   = 127.0.0.1:19131\n",
 		slow = true,

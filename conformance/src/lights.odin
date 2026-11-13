@@ -9,8 +9,6 @@ import "core:sync"
 import "core:thread"
 import "core:time"
 
-// The lights: one thread per light, blocking sockets, one connection at a
-// time. klair never sends one light two requests at once.
 
 Behavior :: enum {
 	Normal,    // answers with a Content-Length
@@ -24,7 +22,6 @@ Behavior :: enum {
 	Silent,    // reads the request, never answers
 }
 
-// A variable, not a constant: constants can't be indexed with a runtime value
 light_names := [Behavior]string {
 	.Normal    = "normal",
 	.No_Length = "nolen",
@@ -50,13 +47,9 @@ LIGHT_PORTS :: [Behavior]int {
 }
 
 MAX_REQUEST :: 64 * 1024
-// Shorter than klair's 3s per attempt, so a request that stops halfway is
-// reported before klair gives up on it
 READ_TIMEOUT :: 2 * time.Second
 TRICKLE_DELAY :: 10 * time.Millisecond
 
-// Everything the light threads and the checker share. One lock, held only
-// while reading or writing these fields, never while sending.
 Server :: struct {
 	lock:          sync.Mutex,
 	states:        [Behavior]Light_State,
@@ -80,8 +73,6 @@ start_lights :: proc() {
 	}
 }
 
-// Every light back to its default state, flaky drops its next connection
-// again, the log is emptied
 reset_lights :: proc() {
 	sync.guard(&server.lock)
 	for &state in server.states {
@@ -91,8 +82,6 @@ reset_lights :: proc() {
 	strings.builder_reset(&server.log)
 }
 
-// Every request since the last reset, one per line, sorted: requests to
-// different lights arrive in any order
 light_log :: proc(allocator := context.temp_allocator) -> []string {
 	sync.guard(&server.lock)
 	text := strings.trim_suffix(strings.to_string(server.log), "\n")
@@ -104,7 +93,6 @@ light_log :: proc(allocator := context.temp_allocator) -> []string {
 	return lines
 }
 
-// Call with server.lock held
 log_line :: proc(format: string, args: ..any) {
 	line := fmt.tprintf(format, ..args)
 	strings.write_string(&server.log, line)
@@ -189,7 +177,6 @@ handle_light :: proc(client: net.TCP_Socket, behavior: Behavior) {
 	case .Hangup:
 		body := json_from_state(state)
 		head := build_response("200 OK", "", false)
-		// Swap the end of the headers for a Content-Length that's never met
 		head = head[:len(head) - len("\r\n")]
 		send(client, fmt.tprintf("%sContent-Length: 1000\r\n\r\n%s", head, body[:len(body) / 2]))
 	case .Silent:
@@ -197,9 +184,6 @@ handle_light :: proc(client: net.TCP_Socket, behavior: Behavior) {
 	}
 }
 
-// Reads until parse_request says the request is complete. A request that
-// stops halfway, by closing or by going quiet for READ_TIMEOUT, is a
-// violation too.
 read_request :: proc(client: net.TCP_Socket) -> (request: Request, problem: string) {
 	data := make([dynamic]u8, 0, 1024, context.temp_allocator)
 	chunk: [1024]u8
@@ -228,7 +212,6 @@ read_request :: proc(client: net.TCP_Socket) -> (request: Request, problem: stri
 	}
 }
 
-// Until klair gives up and closes. The read timeout only wakes us up.
 wait_for_close :: proc(client: net.TCP_Socket) {
 	chunk: [1024]u8
 	for {
@@ -242,7 +225,6 @@ wait_for_close :: proc(client: net.TCP_Socket) {
 	}
 }
 
-// false once klair has hung up
 send :: proc(client: net.TCP_Socket, text: string) -> bool {
 	_, err := net.send_tcp(client, transmute([]u8)text)
 	return err == nil

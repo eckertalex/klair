@@ -74,69 +74,69 @@ Ticked when it matches the [CLI spec](docs/cli-spec.md) and passes every [confor
 
 #### `c`
 
-- [ ] `help` and the usage text
-- [ ] `version` and the version string
-- [ ] Usage errors with a message, exit 2
-- [ ] Config location (XDG, `%APPDATA%`)
-- [ ] Config parsing and its errors
-- [ ] `-l` to pick a light
-- [ ] `status`
-- [ ] `on` and `off`
-- [ ] `-b` brightness and `-t` temperature
-- [ ] Kelvin and mired conversion
-- [ ] All lights at once
-- [ ] Retries and timeouts
-- [ ] Light error messages
-- [ ] Unit tests
-- [ ] All conformance cases pass
-- [ ] Builds and runs on Linux
+- [x] `help` and the usage text
+- [x] `version` and the version string
+- [x] Usage errors with a message, exit 2
+- [x] Config location (XDG, `%APPDATA%`)
+- [x] Config parsing and its errors
+- [x] `-l` to pick a light
+- [x] `status`
+- [x] `on` and `off`
+- [x] `-b` brightness and `-t` temperature
+- [x] Kelvin and mired conversion
+- [x] All lights at once
+- [x] Retries and timeouts
+- [x] Light error messages
+- [x] Unit tests
+- [x] All conformance cases pass on macOS and Linux
+- [x] Builds and runs on Linux
 - [ ] Builds and runs on Windows
 
 #### `odin`
 
-- [ ] `help` and the usage text
-- [ ] `version` and the version string
-- [ ] Usage errors with a message, exit 2
-- [ ] Config location (XDG, `%APPDATA%`)
-- [ ] Config parsing and its errors
-- [ ] `-l` to pick a light
-- [ ] `status`
-- [ ] `on` and `off`
-- [ ] `-b` brightness and `-t` temperature
-- [ ] Kelvin and mired conversion
-- [ ] All lights at once
-- [ ] Retries and timeouts
-- [ ] Light error messages
-- [ ] Unit tests
-- [ ] All conformance cases pass
-- [ ] Builds and runs on Linux
+- [x] `help` and the usage text
+- [x] `version` and the version string
+- [x] Usage errors with a message, exit 2
+- [x] Config location (XDG, `%APPDATA%`)
+- [x] Config parsing and its errors
+- [x] `-l` to pick a light
+- [x] `status`
+- [x] `on` and `off`
+- [x] `-b` brightness and `-t` temperature
+- [x] Kelvin and mired conversion
+- [x] All lights at once
+- [x] Retries and timeouts
+- [x] Light error messages
+- [x] Unit tests
+- [x] All conformance cases pass
+- [x] Builds and runs on Linux
 - [ ] Builds and runs on Windows
 
 #### `go`
 
-- [ ] `help` and the usage text
-- [ ] `version` and the version string
-- [ ] Usage errors with a message, exit 2
-- [ ] Config location (XDG, `%APPDATA%`)
-- [ ] Config parsing and its errors
-- [ ] `-l` to pick a light
-- [ ] `status`
-- [ ] `on` and `off`
-- [ ] `-b` brightness and `-t` temperature
-- [ ] Kelvin and mired conversion
-- [ ] All lights at once
-- [ ] Retries and timeouts
-- [ ] Light error messages
-- [ ] Unit tests
-- [ ] All conformance cases pass
-- [ ] Builds and runs on Linux
+- [x] `help` and the usage text
+- [x] `version` and the version string
+- [x] Usage errors with a message, exit 2
+- [x] Config location (XDG, `%APPDATA%`)
+- [x] Config parsing and its errors
+- [x] `-l` to pick a light
+- [x] `status`
+- [x] `on` and `off`
+- [x] `-b` brightness and `-t` temperature
+- [x] Kelvin and mired conversion
+- [x] All lights at once
+- [x] Retries and timeouts
+- [x] Light error messages
+- [x] Unit tests
+- [x] All conformance cases pass
+- [x] Builds and runs on Linux
 - [ ] Builds and runs on Windows
 
 #### Testing
 
-- [ ] Fake lights
-- [ ] Conformance checker and the cases
-- [ ] `./check.sh` builds everything and runs every case
+- [x] Fake lights
+- [x] Conformance checker and the cases
+- [x] `./check.sh` builds everything and runs every case
 
 ## Build
 

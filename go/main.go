@@ -1,8 +1,6 @@
 package main
 
 import (
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +26,6 @@ func assert(cond bool, msg string) {
 	}
 }
 
-// klair version 0.4.0+8b30b7a-dirty (go, debug)
 func buildVersionFull() string {
 	s := BUILD_NAME + " version " + BUILD_VERSION
 	if BUILD_GIT_HASH != "" {
@@ -41,7 +38,7 @@ func buildVersionFull() string {
 	return s + ")"
 }
 
-var USAGE = `Usage: klair [command] [flags]
+const USAGE = `Usage: klair [command] [flags]
 
 Commands:
   status   [-l NAME]
@@ -79,15 +76,17 @@ var COMMAND_NAMES = [...]string{
 }
 
 type Args struct {
-	Command     Command
-	LightName   string // "" means all lights
-	Brightness  *int64 // nil menas not given
-	Temperature *int64 // Kelvin, nil means not given
+	Command      Command
+	LightName    string
+	HasLightName bool
+	Brightness   *int64 // nil means not given
+	Temperature  *int64 // Kelvin, nil means not given
 }
 
 func parseArgs(args []string) (Args, string) {
 	var parsed Args
 
+	i := 0
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		found := false
 		for command, name := range COMMAND_NAMES {
@@ -96,34 +95,43 @@ func parseArgs(args []string) (Args, string) {
 				found = true
 			}
 		}
-
 		if !found {
 			return Args{}, "unknown command: " + args[0]
 		}
-		args = args[1:]
+		i = 1
 	}
 
-	// The standard flag parser, so its -h and error messages come with it.
-	// run prints the usage, so the parser itself prints nothing.
-	fs := flag.NewFlagSet(COMMAND_NAMES[parsed.Command], flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if parsed.Command <= COMMAND_OFF {
-		fs.StringVar(&parsed.LightName, "l", "", "")
-	}
-	if parsed.Command == COMMAND_ON {
-		int64Flag(fs, "b", &parsed.Brightness)
-		int64Flag(fs, "t", &parsed.Temperature)
-	}
+	for ; i < len(args); i += 2 {
+		flag := args[i]
+		if !strings.HasPrefix(flag, "-") {
+			return Args{}, "unexpected argument: " + flag
+		}
 
-	err := fs.Parse(args)
-	if errors.Is(err, flag.ErrHelp) {
-		return Args{Command: COMMAND_HELP}, ""
-	}
-	if err != nil {
-		return Args{}, err.Error()
-	}
-	if fs.NArg() > 0 {
-		return Args{}, "unexpected argument: " + fs.Arg(0)
+		takesL := flag == "-l" && parsed.Command <= COMMAND_OFF
+		takesBT := (flag == "-b" || flag == "-t") && parsed.Command == COMMAND_ON
+		if !takesL && !takesBT {
+			return Args{}, "unknown flag for " + COMMAND_NAMES[parsed.Command] + ": " + flag
+		}
+		if i+1 >= len(args) {
+			return Args{}, "missing value for " + flag
+		}
+
+		value := args[i+1]
+		if flag == "-l" {
+			parsed.LightName = value
+			parsed.HasLightName = true
+			continue
+		}
+
+		n, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return Args{}, "invalid value for " + flag + ": " + value
+		}
+		if flag == "-b" {
+			parsed.Brightness = &n
+		} else {
+			parsed.Temperature = &n
+		}
 	}
 
 	if b := parsed.Brightness; b != nil && (*b < BRIGHTNESS_MIN || *b > BRIGHTNESS_MAX) {
@@ -134,20 +142,6 @@ func parseArgs(args []string) (Args, string) {
 	}
 
 	return parsed, ""
-}
-
-// 64 bits on every platform, then parseArgs checks the range on whatever
-// parsed. Base 10, so 010 is ten. ParseInt also takes "+50", which the spec
-// allows. Both syntax errors and numbers too large for 64 bits are invalid.
-func int64Flag(fs *flag.FlagSet, name string, value **int64) {
-	fs.Func(name, "", func(s string) error {
-		n, err := strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			return errors.New("not a 64 bit integer")
-		}
-		*value = &n
-		return nil
-	})
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -166,30 +160,80 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	configHome, err := configDir()
+	dir, err := configDir()
 	if err != nil {
-		fmt.Fprintf(stderr, "cannot determine config directory")
+		fmt.Fprintln(stderr, "cannot determine config directory")
 		return 1
 	}
-	configPath := filepath.Join(configHome, "klair")
+	configPath := filepath.Join(dir, "klair")
 
 	text, err := os.ReadFile(configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cannot read config: %s\n", configPath)
+		fmt.Fprintf(stderr, "cannot read config: %s\n", configPath)
 		return 1
 	}
 
 	lights, err := parseConfig(string(text))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid config %s: %v\n", configPath, err)
+		fmt.Fprintf(stderr, "invalid config %s: %v\n", configPath, err)
 		return 1
 	}
 	if len(lights) == 0 {
-		fmt.Fprintf(os.Stderr, "no lights in config: %s\n", configPath)
+		fmt.Fprintf(stderr, "no lights in config: %s\n", configPath)
 		return 1
 	}
 
-	return 0
+	targets, found := selectLights(lights, parsed.LightName, parsed.HasLightName)
+	if !found {
+		names := make([]string, len(lights))
+		for i, light := range lights {
+			names[i] = light.Name
+		}
+		fmt.Fprintf(stderr, "light \"%s\" not found; available: %s\n", parsed.LightName, strings.Join(names, ", "))
+		return 1
+	}
+
+	var settings *Settings
+	verb := "Status"
+	switch parsed.Command {
+	case COMMAND_ON:
+		settings = &Settings{On: 1}
+		if b := parsed.Brightness; b != nil {
+			brightness := int(*b)
+			settings.Brightness = &brightness
+		}
+		if kelvin := parsed.Temperature; kelvin != nil {
+			mired := kelvinToMired(int(*kelvin))
+			settings.Temperature = &mired
+		}
+		verb = "Update"
+	case COMMAND_OFF:
+		settings = &Settings{On: 0}
+		verb = "Update"
+	}
+
+	results := requestAll(targets, settings)
+
+	code := 0
+	for i, result := range results {
+		name := targets[i].Name
+		if result.Error != ERROR_NONE {
+			fmt.Fprintf(stdout, "%s of light \"%s\": error: %s\n", verb, name, messageFromResult(result))
+			code = 1
+			continue
+		}
+
+		power := "OFF"
+		if result.State.On == 1 {
+			power = "ON"
+		}
+		fmt.Fprintf(stdout, "Status of light \"%s\":\n", name)
+		fmt.Fprintf(stdout, "  Power:       %s\n", power)
+		fmt.Fprintf(stdout, "  Brightness:  %d%%\n", result.State.Brightness)
+		fmt.Fprintf(stdout, "  Temperature: %dK\n", miredToKelvin(result.State.Temperature))
+	}
+
+	return code
 }
 
 func main() {

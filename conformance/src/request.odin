@@ -3,8 +3,6 @@ package conformance
 import "core:fmt"
 import "core:strings"
 
-// Parsing and checking requests. Nothing here touches a socket, so all of it
-// is unit tested.
 
 MAX_HEADERS :: 32
 
@@ -29,15 +27,12 @@ Parse_Status :: enum {
 	Malformed,
 }
 
-// What a PUT asks for. Fields the body doesn't have stay nil.
 Light_Update :: struct {
 	on:          int,
 	brightness:  Maybe(int),
 	temperature: Maybe(int),
 }
 
-// Splits `data` into a request. Complete once the headers and Content-Length
-// bytes of body are in. The strings are views into `data`.
 parse_request :: proc(data: string) -> (request: Request, status: Parse_Status, problem: string) {
 	request.content_length = -1
 
@@ -95,8 +90,6 @@ find_header :: proc(request: ^Request, name: string) -> (value: string, ok: bool
 	return "", false
 }
 
-// The spec's request rules, checked in order. Returns the first one broken,
-// or "" when the request is fine.
 check_request :: proc(request: ^Request) -> (violation: string) {
 	if request.method != "GET" && request.method != "PUT" {
 		return fmt.tprintf("method %s", request.method)
@@ -136,9 +129,6 @@ check_request :: proc(request: ^Request) -> (violation: string) {
 	return body_violation
 }
 
-// The spec's body, byte for byte:
-// {"lights":[{"on":<0|1>,"brightness":<3-100>,"temperature":<143-344>}]}
-// brightness and temperature are optional, the order is fixed.
 parse_body :: proc(body: string) -> (update: Light_Update, violation: string) {
 	rest := body
 
@@ -185,8 +175,6 @@ skip_prefix :: proc(s: ^string, prefix: string) -> bool {
 	return true
 }
 
-// A JSON integer the way an encoder writes it: digits, no sign, no leading
-// zero. At most 6 digits, more than any valid value needs.
 @(private = "file")
 take_int :: proc(s: ^string, value: ^int) -> bool {
 	digits := 0
@@ -201,8 +189,6 @@ take_int :: proc(s: ^string, value: ^int) -> bool {
 	return true
 }
 
-// Only plain digits, unlike strconv.parse_int, which also takes signs,
-// underscores and base prefixes
 int_from_digits :: proc(s: string) -> (value: int, ok: bool) {
 	if len(s) == 0 || len(s) > 9 {
 		return 0, false

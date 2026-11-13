@@ -1,13 +1,19 @@
 #define BUILD_NAME "klair"
 
-// includes
 #include "base/base_inc.h"
+#include "net/net_inc.h"
+#include "klair/klair.h"
 
-// implementations
 #include "base/base_inc.c"
+#include "net/net_inc.c"
+#include "klair/klair_temperature.c"
+#include "klair/klair_config.c"
+#include "klair/klair_args.c"
+#include "klair/klair_http.c"
+#include "klair/klair_client.c"
+#include "klair/klair_cli.c"
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char **argv) {
-    printf("%s\n", BUILD_VERSION_FULL);
-
-    return 0;
+int main(int argc, char **argv) {
+    Arena *arena = arena_alloc(GB(1));
+    return klair_run(arena, (u64)argc, argv);
 }

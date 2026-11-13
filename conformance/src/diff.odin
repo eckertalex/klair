@@ -2,15 +2,12 @@ package conformance
 
 import "core:strings"
 
-// A line diff for failure reports: "- " only expected, "+ " only actual,
-// "  " both. Outputs are a few lines, so every line is shown.
 
 diff :: proc(want, got: string) -> string {
 	return diff_lines(lines_of(want), lines_of(got))
 }
 
 diff_lines :: proc(want, got: []string) -> string {
-	// lcs[i][j] is the longest common subsequence of want[i:] and got[j:]
 	n, m := len(want), len(got)
 	lcs := make([][]int, n + 1, context.temp_allocator)
 	for &row in lcs {
@@ -41,7 +38,6 @@ diff_lines :: proc(want, got: []string) -> string {
 	return strings.trim_suffix(strings.to_string(b), "\n")
 }
 
-// A last line without "\n" is marked, so a missing newline shows up
 @(private = "file")
 lines_of :: proc(text: string) -> []string {
 	if text == "" {
@@ -55,7 +51,6 @@ lines_of :: proc(text: string) -> []string {
 	return lines
 }
 
-// \r is invisible in a terminal, so it's written out
 @(private = "file")
 write_line :: proc(b: ^strings.Builder, marker, line: string) {
 	strings.write_string(b, marker)

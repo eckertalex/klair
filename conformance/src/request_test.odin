@@ -3,7 +3,6 @@ package conformance
 import "core:fmt"
 import "core:testing"
 
-// Host and Connection: close, which every request needs
 HEADERS :: "Host: 127.0.0.1\r\nConnection: close\r\n"
 GET :: "GET /elgato/lights HTTP/1.1\r\n" + HEADERS + "\r\n"
 BODY :: `{"lights":[{"on":1,"brightness":50,"temperature":213}]}`
@@ -12,7 +11,6 @@ put :: proc(body: string) -> string {
 	return build_put("Content-Type: application/json", body)
 }
 
-// A PUT with HEADERS, the given ones and a matching Content-Length
 build_put :: proc(headers, body: string) -> string {
 	return fmt.tprintf(
 		"PUT /elgato/lights HTTP/1.1\r\n%s%s\r\nContent-Length: %d\r\n\r\n%s",
@@ -23,7 +21,6 @@ build_put :: proc(headers, body: string) -> string {
 	)
 }
 
-// Parses a complete request and returns what check_request says about it
 violation_of :: proc(t: ^testing.T, data: string, loc := #caller_location) -> string {
 	request, status, problem := parse_request(data)
 	testing.expect_value(t, status, Parse_Status.Complete, loc)
@@ -89,7 +86,6 @@ check_accepts_what_the_spec_allows :: proc(t: ^testing.T) {
 
 	testing.expect_value(t, violation_of(t, GET), "")
 	testing.expect_value(t, violation_of(t, put(BODY)), "")
-	// Header names and the close value in any case, extra headers allowed
 	testing.expect_value(
 		t,
 		violation_of(t, "GET /elgato/lights HTTP/1.1\r\nhost: x\r\nCONNECTION: Close\r\nUser-Agent: Go\r\n\r\n"),

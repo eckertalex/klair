@@ -1,6 +1,3 @@
-// Conformance checks for klair: fake Elgato lights on localhost, and a
-// checker that runs klair binaries against them and compares what they do
-// with the CLI spec.
 package conformance
 
 import "core:fmt"
